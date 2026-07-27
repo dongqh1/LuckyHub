@@ -21,6 +21,16 @@ class DatabaseSchemaMigrationTests {
             "prize:image:upload"
     );
 
+    private static final Set<String> ACTIVITY_PERMISSIONS = Set.of(
+            "activity:create",
+            "activity:read",
+            "activity:update",
+            "activity:publish",
+            "activity:disable",
+            "activity:restore",
+            "activity:prize:manage"
+    );
+
     private static final Set<String> BUSINESS_TABLES = Set.of(
             "sys_user",
             "sys_role",
@@ -103,6 +113,33 @@ class DatabaseSchemaMigrationTests {
         assertThat(successfulMigration).isEqualTo(1);
         assertThat(permissionCodes).containsExactlyInAnyOrderElementsOf(PRIZE_PERMISSIONS);
         assertThat(adminPermissionCodes).containsExactlyInAnyOrderElementsOf(PRIZE_PERMISSIONS);
+    }
+
+    @Test
+    void seedsActivityPermissionsAndGrantsThemToAdmin() {
+        Integer successfulMigration = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM flyway_schema_history
+                WHERE version = '4'
+                  AND success = 1
+                """, Integer.class);
+        List<String> permissionCodes = jdbcTemplate.queryForList("""
+                SELECT permission_code
+                FROM sys_permission
+                WHERE permission_code LIKE 'activity:%'
+                """, String.class);
+        List<String> adminPermissionCodes = jdbcTemplate.queryForList("""
+                SELECT permission.permission_code
+                FROM sys_role_permission role_permission
+                JOIN sys_role role_record ON role_record.id = role_permission.role_id
+                JOIN sys_permission permission ON permission.id = role_permission.permission_id
+                WHERE role_record.role_code = 'ADMIN'
+                  AND permission.permission_code LIKE 'activity:%'
+                """, String.class);
+
+        assertThat(successfulMigration).isEqualTo(1);
+        assertThat(permissionCodes).containsExactlyInAnyOrderElementsOf(ACTIVITY_PERMISSIONS);
+        assertThat(adminPermissionCodes).containsExactlyInAnyOrderElementsOf(ACTIVITY_PERMISSIONS);
     }
 
     @Test

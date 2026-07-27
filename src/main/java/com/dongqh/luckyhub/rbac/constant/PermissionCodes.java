@@ -50,6 +50,27 @@ public final class PermissionCodes {
     public static final String PRIZE_IMAGE_UPLOAD =
             "prize:image:upload";
 
+    public static final String ACTIVITY_CREATE =
+            "activity:create";
+
+    public static final String ACTIVITY_READ =
+            "activity:read";
+
+    public static final String ACTIVITY_UPDATE =
+            "activity:update";
+
+    public static final String ACTIVITY_PUBLISH =
+            "activity:publish";
+
+    public static final String ACTIVITY_DISABLE =
+            "activity:disable";
+
+    public static final String ACTIVITY_RESTORE =
+            "activity:restore";
+
+    public static final String ACTIVITY_PRIZE_MANAGE =
+            "activity:prize:manage";
+
     private PermissionCodes() {
     }
 }
