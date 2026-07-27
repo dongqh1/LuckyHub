@@ -13,6 +13,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class DatabaseSchemaMigrationTests {
 
+    private static final Set<String> PRIZE_PERMISSIONS = Set.of(
+            "prize:create",
+            "prize:read",
+            "prize:update",
+            "prize:disable",
+            "prize:image:upload"
+    );
+
     private static final Set<String> BUSINESS_TABLES = Set.of(
             "sys_user",
             "sys_role",
@@ -68,6 +76,33 @@ class DatabaseSchemaMigrationTests {
                 """, Integer.class);
 
         assertThat(successfulMigrations).isEqualTo(1);
+    }
+
+    @Test
+    void seedsPrizePermissionsAndGrantsThemToAdmin() {
+        Integer successfulMigration = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM flyway_schema_history
+                WHERE version = '3'
+                  AND success = 1
+                """, Integer.class);
+        List<String> permissionCodes = jdbcTemplate.queryForList("""
+                SELECT permission_code
+                FROM sys_permission
+                WHERE permission_code LIKE 'prize:%'
+                """, String.class);
+        List<String> adminPermissionCodes = jdbcTemplate.queryForList("""
+                SELECT permission.permission_code
+                FROM sys_role_permission role_permission
+                JOIN sys_role role_record ON role_record.id = role_permission.role_id
+                JOIN sys_permission permission ON permission.id = role_permission.permission_id
+                WHERE role_record.role_code = 'ADMIN'
+                  AND permission.permission_code LIKE 'prize:%'
+                """, String.class);
+
+        assertThat(successfulMigration).isEqualTo(1);
+        assertThat(permissionCodes).containsExactlyInAnyOrderElementsOf(PRIZE_PERMISSIONS);
+        assertThat(adminPermissionCodes).containsExactlyInAnyOrderElementsOf(PRIZE_PERMISSIONS);
     }
 
     @Test

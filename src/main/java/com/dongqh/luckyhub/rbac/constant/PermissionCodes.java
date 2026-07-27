@@ -35,6 +35,21 @@ public final class PermissionCodes {
     public static final String USER_PERMISSION_READ =
             "user-permission:read";
 
+    public static final String PRIZE_CREATE =
+            "prize:create";
+
+    public static final String PRIZE_READ =
+            "prize:read";
+
+    public static final String PRIZE_UPDATE =
+            "prize:update";
+
+    public static final String PRIZE_DISABLE =
+            "prize:disable";
+
+    public static final String PRIZE_IMAGE_UPLOAD =
+            "prize:image:upload";
+
     private PermissionCodes() {
     }
 }
