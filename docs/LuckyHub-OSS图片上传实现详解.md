@@ -1,386 +1,150 @@
-# LuckyHub OSS 图片上传实现详解
+# LuckyHub OSS 图片上传：从一个 POST 请求开始
 
-> 本文基于 LuckyHub 当前源码编写，面向正在学习 Spring Boot、文件上传、阿里云 OSS 和分层设计的开发者。
+> 这不是一份“类名说明书”，而是一堂按程序执行顺序展开的课。
 >
-> 文档不仅说明“怎样调用”，还会解释一次请求从浏览器进入系统后，依次经过哪些类、为什么这样设计、公开 URL 如何产生，以及这个 URL 最终怎样保存到 MySQL。
+> 我们只跟踪一件事：管理员使用 Postman 发送
+> `POST /api/admin/prize-images` 后，图片怎样一步一步进入阿里云 OSS，最后怎样把公开 URL 保存到奖品表。
 
-## 1. 最终实现了什么
+---
 
-LuckyHub 的奖品图片采用“两步式”处理：
+## 0. 先记住最终流程
 
-1. 管理员先调用图片上传接口，将图片上传到阿里云 OSS。
-2. 后端返回图片的公开 URL 和 OSS Object Key。
-3. 前端再调用创建奖品或修改奖品接口，把公开 URL 放进 `imageUrl`。
-4. 奖品服务将公开 URL 保存到 MySQL 的 `marketing_prize.image_url`。
-
-对应接口如下：
+一次完整操作实际上包含两个请求：
 
 ```text
+第一个请求：上传图片
 POST /api/admin/prize-images
+        ↓
+校验图片
+        ↓
+上传到 OSS
+        ↓
+返回公开 URL
+
+第二个请求：创建奖品
 POST /api/admin/prizes
-PUT  /api/admin/prizes/{id}
+请求 JSON 中携带 imageUrl
+        ↓
+把 URL 保存到 marketing_prize.image_url
 ```
 
-最重要的区别是：
+为什么分成两个请求？
 
-```text
-图片上传接口
-    负责：校验图片、上传 OSS、返回公开 URL
-    不负责：写入 marketing_prize
+- 图片是二进制文件，适合使用 `multipart/form-data`。
+- 奖品名称、类型、等级、图片 URL 等是结构化数据，适合使用 JSON。
+- 图片上传成功后，前端可以立刻预览。
+- 创建和修改奖品可以共用同一个图片 URL。
 
-创建/修改奖品接口
-    负责：把 imageUrl 保存到 marketing_prize.image_url
-    不负责：接收 MultipartFile 或直接上传 OSS
-```
-
-这种设计把“二进制文件上传”和“奖品业务数据写入”分开，使前端可以先预览图片，也使奖品 JSON 接口保持简单。
+本章先完整跟踪第一个请求，最后再讲第二个请求怎样保存 URL。
 
 ---
 
-## 2. 一次完整请求的总体流程
+# 第一段：请求是怎样进入后端的
 
-下面是一张从登录到数据库保存的完整流程图：
+## 1. 从 Postman 发出请求
 
-```mermaid
-sequenceDiagram
-    participant Admin as 管理员/Postman
-    participant Auth as AuthenticationFilter
-    participant Permission as PermissionInterceptor
-    participant Controller as PrizeImageController
-    participant Service as PrizeImageService
-    participant Validator as PrizeImageValidator
-    participant Gateway as ObjectStorageGateway
-    participant OSS as 阿里云 OSS
-    participant PrizeAPI as PrizeController
-    participant DB as MySQL
-
-    Admin->>Auth: POST /api/admin/prize-images + Bearer Token
-    Auth->>Auth: 校验 JWT 和 Redis Session
-    Auth->>Permission: 进入后台权限校验
-    Permission->>Permission: 检查 prize:image:upload
-    Permission->>Controller: 允许执行上传方法
-    Controller->>Service: upload(MultipartFile)
-    Service->>Validator: validate(file)
-    Validator->>Validator: 大小、Content-Type、文件头校验
-    Validator-->>Service: ValidatedImage
-    Service->>Service: 生成 prizes/yyyy/MM/UUID.ext
-    Service->>Gateway: put(objectKey, bytes, contentType)
-    Gateway->>OSS: PutObjectRequest
-    OSS-->>Gateway: 上传成功
-    Service->>Service: publicBaseUrl + "/" + objectKey
-    Service-->>Admin: url + objectKey
-
-    Admin->>PrizeAPI: POST /api/admin/prizes，imageUrl=url
-    PrizeAPI->>DB: INSERT marketing_prize
-    DB-->>Admin: 创建后的 PrizeView
-```
-
-如果只执行第一段，OSS 中会存在图片，但数据库中还没有奖品记录。
-
-如果图片上传成功后，用户没有继续创建奖品，这张图片会成为“孤立图片”。当前版本接受这种情况，没有实现自动清理任务。
-
----
-
-## 3. 相关源码目录
-
-OSS 图片上传涉及以下主要文件：
+假设我们要上传一个真正的 PNG 文件：
 
 ```text
-src/main/java/com/dongqh/luckyhub/prize/
-├─ config/
-│  ├─ OssProperties.java
-│  └─ OssConfiguration.java
-├─ controller/
-│  ├─ PrizeImageController.java
-│  └─ PrizeController.java
-├─ image/
-│  ├─ PrizeImageValidator.java
-│  ├─ PrizeImageService.java
-│  └─ ValidatedImage.java
-├─ storage/
-│  ├─ ObjectStorageGateway.java
-│  ├─ AliyunOssObjectStorageGateway.java
-│  └─ UnavailableObjectStorageGateway.java
-├─ vo/
-│  └─ ImageUploadView.java
-├─ dto/
-│  ├─ CreatePrizeCommand.java
-│  └─ UpdatePrizeCommand.java
-├─ entity/
-│  └─ MarketingPrize.java
-├─ service/impl/
-│  └─ PrizeServiceImpl.java
-└─ enums/
-   └─ PrizeErrorCode.java
+D:\prize.png
 ```
 
-配置和数据库文件：
+Postman 配置如下：
 
 ```text
-pom.xml
-.env
-.env.example
-src/main/resources/application.yaml
-src/main/resources/db/migration/V3__add_prize_management_permissions.sql
+Method: POST
+URL: http://localhost:8080/api/admin/prize-images
+
+Headers:
+Authorization: Bearer 你的登录Token
+
+Body:
+form-data
+
+Key:  file
+Type: File
+Value: D:\prize.png
 ```
 
-测试文件：
+不要自己填写 `Content-Type: application/json`。
+
+选择 `form-data` 后，Postman 会自动生成类似下面的请求：
+
+```http
+POST /api/admin/prize-images HTTP/1.1
+Authorization: Bearer eyJ...
+Content-Type: multipart/form-data; boundary=----PostmanBoundary
+
+------PostmanBoundary
+Content-Disposition: form-data; name="file"; filename="prize.png"
+Content-Type: image/png
+
+这里是真正的图片二进制字节
+------PostmanBoundary--
+```
+
+### 现在遇到的第一个问题
+
+普通 JSON 只能很方便地表示文字、数字、布尔值和对象，不能直接承载原始图片字节。
+
+因此我们需要一种“一个 HTTP 请求里可以放多个部分”的格式，这就是：
 
 ```text
-src/test/java/com/dongqh/luckyhub/prize/
-├─ controller/PrizeImageControllerTests.java
-├─ image/PrizeImageValidatorTests.java
-├─ image/PrizeImageServiceTests.java
-└─ storage/OssConfigurationTests.java
+multipart/form-data
 ```
 
----
+`multipart` 的意思是“多个部分”。每一部分都可以有自己的名称、文件名、类型和内容。
 
-## 4. OSS 中几个容易混淆的概念
-
-### 4.1 Region
-
-Region 是 Bucket 所在的地域，例如：
+本项目只有一个部分：
 
 ```text
-华东1（杭州） → cn-hangzhou
-华东2（上海） → cn-shanghai
-华北2（北京） → cn-beijing
+部分名称：file
+文件名称：prize.png
+声明类型：image/png
+实际内容：图片字节
 ```
 
-项目中的配置：
-
-```properties
-OSS_REGION=cn-hangzhou
-```
-
-OSS SDK V2 使用 Region 参与请求构建和 V4 签名。
-
-### 4.2 Endpoint
-
-Endpoint 是程序访问 OSS 服务的地址，不包含 Bucket 名：
-
-```text
-https://oss-cn-hangzhou.aliyuncs.com
-```
-
-配置：
-
-```properties
-OSS_ENDPOINT=https://oss-cn-hangzhou.aliyuncs.com
-```
-
-它主要用于后端 SDK 上传文件。
-
-### 4.3 Bucket
-
-Bucket 是存放对象的容器，例如：
-
-```text
-luckyhub-prize
-```
-
-配置：
-
-```properties
-OSS_BUCKET=luckyhub-prize
-```
-
-### 4.4 Object Key
-
-Object Key 是文件在 Bucket 中的对象名。
-
-LuckyHub 生成的格式：
-
-```text
-prizes/2026/07/123e4567-e89b-12d3-a456-426614174000.png
-```
-
-OSS 是扁平化对象存储，并没有真正的磁盘目录。`/` 只是 Object Key 的一部分，OSS 控制台会把它展示成目录结构。
-
-### 4.5 Public Base URL
-
-Public Base URL 是浏览器访问这个 Bucket 的公开根地址：
-
-```text
-https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com
-```
-
-配置：
-
-```properties
-OSS_PUBLIC_BASE_URL=https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com
-```
-
-它包含 Bucket 名，而 Endpoint 不包含：
-
-```text
-OSS_ENDPOINT
-https://oss-cn-hangzhou.aliyuncs.com
-
-OSS_PUBLIC_BASE_URL
-https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com
-        └─────── Bucket 名 ───────┘
-```
-
-如果以后给 OSS 绑定了自定义域名：
-
-```text
-https://img.example.com
-```
-
-只需要修改 `OSS_PUBLIC_BASE_URL`。上传使用的 Endpoint 可以保持不变。
-
-### 4.6 AccessKey 怎样获得 Bucket 权限
-
-AccessKey 本身不直接绑定 Bucket。
-
-完整关系是：
-
-```text
-AccessKey ID
-    ↓ 识别 RAM 用户
-RAM 用户
-    ↓ 关联 RAM Policy
-RAM Policy
-    ↓ Allow oss:PutObject 到指定资源
-Bucket/prizes/*
-```
-
-程序使用 AccessKey 对请求签名。OSS 根据 AccessKey ID 找到对应的阿里云账号或 RAM 用户，然后综合判断 RAM Policy、Bucket Policy 和显式 Deny。
-
-推荐为 LuckyHub 创建专门的 RAM 用户，并只授予：
-
-```json
-{
-  "Version": "1",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "oss:PutObject"
-      ],
-      "Resource": [
-        "acs:oss:*:*:luckyhub-prize/prizes/*"
-      ]
-    }
-  ]
-}
-```
-
-不要在正式环境长期使用阿里云主账号 AccessKey，也不要给应用无必要的 `AliyunOSSFullAccess`。
-
----
-
-## 5. Maven SDK 依赖
-
-项目在 `pom.xml` 中声明：
-
-```xml
-<properties>
-    <aliyun-oss-v2.version>0.5.0</aliyun-oss-v2.version>
-</properties>
-
-<dependency>
-    <groupId>com.aliyun</groupId>
-    <artifactId>alibabacloud-oss-v2</artifactId>
-    <version>${aliyun-oss-v2.version}</version>
-</dependency>
-```
-
-这里使用的是阿里云 OSS Java SDK V2。
-
-核心使用的 SDK 类型：
+这里的 `file` 非常重要。它必须和后端的：
 
 ```java
-OSSClient
-StaticCredentialsProvider
-PutObjectRequest
-BinaryData
+@RequestPart("file")
 ```
 
-各自作用：
-
-| 类型 | 作用 |
-|---|---|
-| `OSSClient` | 执行 OSS API 请求 |
-| `StaticCredentialsProvider` | 向 SDK 提供 AccessKey ID 和 Secret |
-| `PutObjectRequest` | 描述一次文件上传请求 |
-| `BinaryData` | 把 Java 字节数组转换成 SDK 请求体 |
-
-阿里云官方 Java SDK V2 文档：
-
-- <https://help.aliyun.com/zh/oss/developer-reference/oss-sdk-for-java-2-0>
-- <https://help.aliyun.com/zh/oss/developer-reference/putobject>
+完全一致，否则 Spring 找不到这一部分。
 
 ---
 
-## 6. 配置是怎样进入 Spring Boot 的
+## 2. Spring 先把 HTTP 文件转换成 MultipartFile
 
-### 6.1 `.env`
+请求到达 Tomcat 后，Spring 会解析 `multipart/form-data`，并把名为 `file` 的部分包装成：
 
-项目根目录 `.env` 保存本地运行配置：
-
-```properties
-OSS_ENABLED=true
-OSS_REGION=cn-hangzhou
-OSS_ENDPOINT=https://oss-cn-hangzhou.aliyuncs.com
-OSS_BUCKET=luckyhub-prize
-OSS_ACCESS_KEY_ID=你的RAM用户AccessKeyID
-OSS_ACCESS_KEY_SECRET=对应的AccessKeySecret
-OSS_PUBLIC_BASE_URL=https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com
+```java
+MultipartFile
 ```
 
-真实 `.env` 已被 `.gitignore` 忽略，不应提交到 Git。
+我们没有自己编写 HTTP 报文解析器，因为 Spring 已经提供了这个工具。
 
-`.env.example` 只保存字段示例，不能放真实密钥。
+`MultipartFile` 可以理解成“Spring 对上传文件的统一包装”。常用方法如下：
 
-### 6.2 `application.yaml`
-
-Spring Boot 通过下面的配置加载根目录 `.env`：
-
-```yaml
-spring:
-  config:
-    import: optional:file:.env[.properties]
+```java
+file.isEmpty()          // 文件是否为空
+file.getSize()          // 文件大小，单位是字节
+file.getContentType()   // 请求声明的 MIME 类型，例如 image/png
+file.getOriginalFilename() // 客户端传来的原文件名
+file.getBytes()         // 读取真正的文件字节
 ```
 
-`optional:` 表示没有 `.env` 时不会因为文件不存在直接启动失败。
-
-OSS 配置映射如下：
-
-```yaml
-luckyhub:
-  oss:
-    enabled: ${OSS_ENABLED:false}
-    region: ${OSS_REGION:}
-    endpoint: ${OSS_ENDPOINT:}
-    bucket: ${OSS_BUCKET:}
-    access-key-id: ${OSS_ACCESS_KEY_ID:}
-    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
-    public-base-url: ${OSS_PUBLIC_BASE_URL:}
-```
-
-这里使用了 Spring Placeholder：
+注意：
 
 ```text
-${环境变量名:默认值}
+getOriginalFilename() 和 getContentType() 都来自客户端，不能完全相信。
 ```
 
-例如：
+用户可以把 `abc.exe` 改名为 `abc.png`，也可以伪造 `Content-Type: image/png`。所以稍后必须检查文件的真实字节。
 
-```yaml
-enabled: ${OSS_ENABLED:false}
-```
+### 为什么配置 6MB，而业务限制是 5MiB
 
-含义是：
-
-1. 优先读取 `OSS_ENABLED`。
-2. 如果没有配置，就使用 `false`。
-
-所以默认情况下 OSS 是关闭的，避免开发者没有配置密钥时整个应用无法启动。
-
-### 6.3 Multipart 大小设置
+项目中有：
 
 ```yaml
 spring:
@@ -390,623 +154,478 @@ spring:
       max-request-size: 6MB
 ```
 
-这里把 Web 容器接收上限设置成 6 MB，而业务规则是 5 MiB。
+这是 Spring 接收请求的外层限制。如果请求超过 6MB，它还没有进入我们的 Controller，就会被 Spring 拒绝。
 
-这样设计的目的，是让略微超过 5 MiB 的请求先进入应用，再由业务校验返回明确的 `41004`。
+业务校验器中还有：
 
-如果容器上限也正好等于业务上限，请求可能在进入 Controller 之前就被 Spring 拒绝，无法使用奖品模块自己的错误码。
+```java
+static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+```
+
+这是我们自己的业务规则：图片最多 5MiB。
+
+为什么外层是 6MB、业务层是 5MiB？
+
+因为 multipart 请求除了图片本身，还有边界、请求头等少量额外内容。外层稍微放宽，确保 5MiB 图片能进入业务代码，然后由业务代码返回统一的错误信息。
 
 ---
 
-## 7. `OssProperties`：类型安全的配置对象
+## 3. 在 Controller 之前：先验证身份和权限
 
-源码：
+请求虽然到达应用，但不能让任何人都上传图片。
 
-```java
-@ConfigurationProperties(prefix = "luckyhub.oss")
-public record OssProperties(
-        boolean enabled,
-        String region,
-        String endpoint,
-        String bucket,
-        String accessKeyId,
-        String accessKeySecret,
-        String publicBaseUrl
-) {
-}
-```
-
-Spring Boot 会完成以下映射：
+现在缺少两项判断：
 
 ```text
-luckyhub.oss.enabled            → enabled
-luckyhub.oss.region             → region
-luckyhub.oss.endpoint           → endpoint
-luckyhub.oss.bucket             → bucket
-luckyhub.oss.access-key-id      → accessKeyId
-luckyhub.oss.access-key-secret  → accessKeySecret
-luckyhub.oss.public-base-url    → publicBaseUrl
+1. 这个请求是谁发的？
+2. 这个人有没有上传奖品图片的权限？
 ```
 
-使用 record 的好处：
-
-- 配置对象不可变；
-- 自动拥有同名访问方法；
-- 不需要手写 getter/setter；
-- 构造完成后字段不能被业务代码意外修改。
-
-### 7.1 完整性检查
-
-```java
-public boolean isComplete() {
-    return StringUtils.hasText(region)
-            && StringUtils.hasText(endpoint)
-            && StringUtils.hasText(bucket)
-            && StringUtils.hasText(accessKeyId)
-            && StringUtils.hasText(accessKeySecret)
-            && StringUtils.hasText(publicBaseUrl);
-}
-```
-
-只有六个核心值都非空，才认为 OSS 配置完整。
-
-例如：
+所以请求会先经过：
 
 ```text
-OSS_ENABLED=true
-OSS_BUCKET=
+AuthenticationFilter
+        ↓
+PermissionInterceptor
+        ↓
+PrizeImageController
 ```
 
-即使启用了 OSS，因为 Bucket 为空，仍然会被认为配置不可用。
+### 3.1 AuthenticationFilter：确认“你是谁”
 
-### 7.2 规范化公开地址
-
-```java
-public String normalizedPublicBaseUrl() {
-    if (!StringUtils.hasText(publicBaseUrl)) {
-        return "";
-    }
-    return publicBaseUrl.trim().replaceAll("/+$", "");
-}
-```
-
-假设用户填写：
-
-```text
-https://bucket.example.com///
-```
-
-规范化结果：
-
-```text
-https://bucket.example.com
-```
-
-这样后面拼接：
-
-```java
-baseUrl + "/" + objectKey
-```
-
-不会产生：
-
-```text
-https://bucket.example.com////prizes/...
-```
-
----
-
-## 8. `OssConfiguration`：应用启动时选择真实或不可用网关
-
-类定义：
-
-```java
-@Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(OssProperties.class)
-public class OssConfiguration {
-}
-```
-
-`@EnableConfigurationProperties` 让 Spring 创建并绑定 `OssProperties`。
-
-核心 Bean：
-
-```java
-@Bean
-public ObjectStorageGateway objectStorageGateway(OssProperties properties) {
-    if (!properties.enabled() || !properties.isComplete()) {
-        return new UnavailableObjectStorageGateway();
-    }
-
-    OSSClient client = OSSClient.newBuilder()
-            .region(properties.region())
-            .endpoint(properties.endpoint())
-            .credentialsProvider(new StaticCredentialsProvider(
-                    properties.accessKeyId(),
-                    properties.accessKeySecret()
-            ))
-            .build();
-
-    return new AliyunOssObjectStorageGateway(client, properties.bucket());
-}
-```
-
-启动时存在两条路径：
-
-```mermaid
-flowchart TD
-    A[读取 OssProperties] --> B{enabled=true?}
-    B -- 否 --> C[UnavailableObjectStorageGateway]
-    B -- 是 --> D{配置完整?}
-    D -- 否 --> C
-    D -- 是 --> E[创建 StaticCredentialsProvider]
-    E --> F[创建 OSSClient]
-    F --> G[AliyunOssObjectStorageGateway]
-```
-
-### 8.1 为什么不在配置缺失时阻止应用启动
-
-如果没有 OSS 配置就让 Spring 启动失败，那么：
-
-- 登录接口不能测试；
-- 奖品查询不能使用；
-- 数据库和 Redis 测试也会被 OSS 阻断；
-- 新开发者必须先拥有阿里云密钥才能启动项目。
-
-当前设计选择“功能降级”：
-
-```text
-OSS 未配置
-    应用可以启动
-    非图片功能可以使用
-    真正上传图片时返回 51002
-```
-
----
-
-## 9. `ObjectStorageGateway`：为什么不让 Service 直接依赖 OSS SDK
-
-接口：
-
-```java
-public interface ObjectStorageGateway extends AutoCloseable {
-
-    void put(String objectKey, byte[] content, String contentType);
-
-    @Override
-    default void close() throws Exception {
-    }
-}
-```
-
-业务层只知道：
-
-```text
-给我 Object Key、文件内容、Content-Type
-我负责把它放进对象存储
-```
-
-业务层不知道：
-
-- 使用的是阿里云 OSS；
-- SDK 的 Builder 怎样调用；
-- Bucket 参数怎样放入请求；
-- SDK 异常类型是什么。
-
-这叫“依赖抽象，而不是依赖具体实现”。
-
-优点：
-
-1. 单元测试可以使用内存 Fake Gateway，不访问真实 OSS。
-2. 将来可以替换成腾讯云 COS、AWS S3 或 MinIO。
-3. OSS SDK 升级只影响 storage 包。
-4. 业务代码不会充满云厂商 API。
-
-`AutoCloseable` 用于在 Spring 容器关闭时释放 `OSSClient` 持有的网络资源。
-
----
-
-## 10. `AliyunOssObjectStorageGateway`：真正执行 PutObject
-
-构造函数接收：
-
-```java
-private final OSSClient client;
-private final String bucket;
-```
-
-调用上传时，先构建请求：
-
-```java
-PutObjectRequest request = PutObjectRequest.newBuilder()
-        .bucket(bucket)
-        .key(objectKey)
-        .contentType(contentType)
-        .body(BinaryData.fromBytes(content))
-        .build();
-```
-
-逐项解释：
-
-### 10.1 `.bucket(bucket)`
-
-指定上传到哪个 Bucket：
-
-```text
-luckyhub-prize
-```
-
-### 10.2 `.key(objectKey)`
-
-指定对象名：
-
-```text
-prizes/2026/07/UUID.png
-```
-
-### 10.3 `.contentType(contentType)`
-
-把经过后端校验的媒体类型写入 OSS 对象元数据：
-
-```text
-image/jpeg
-image/png
-image/webp
-```
-
-浏览器访问图片时，OSS 会通过 HTTP `Content-Type` 响应头告诉浏览器怎样处理内容。
-
-### 10.4 `.body(BinaryData.fromBytes(content))`
-
-把 Java `byte[]` 包装成 SDK 能发送的请求体。
-
-### 10.5 执行上传
-
-```java
-try {
-    client.putObject(request);
-} catch (RuntimeException exception) {
-    throw new BusinessException(PrizeErrorCode.OSS_UPLOAD_FAILED);
-}
-```
-
-真正的网络请求发生在：
-
-```java
-client.putObject(request);
-```
-
-SDK 会完成：
-
-1. 根据 Endpoint 和 Bucket 构造请求地址；
-2. 使用 AccessKey ID 定位身份；
-3. 使用 AccessKey Secret 对请求进行签名；
-4. 发送 HTTP PUT 请求；
-5. OSS 校验签名和 RAM/Bucket 权限；
-6. OSS 保存对象；
-7. SDK 返回结果或抛出异常。
-
-项目不会把阿里云 SDK 异常直接返回给前端，而是统一转换为：
-
-```text
-错误码：51001
-HTTP：502 Bad Gateway
-消息：奖品图片上传失败
-```
-
-这样可以避免把内部 Bucket、签名或 SDK 细节暴露给调用者。
-
-当前实现的一个限制是：所有 OSS RuntimeException 都映射为同一个 `51001`。因此 Endpoint 错误、AccessKey 错误、权限不足和网络失败对客户端表现相同，需要结合服务器日志和阿里云控制台排查。
-
----
-
-## 11. `UnavailableObjectStorageGateway`：配置不可用时怎样失败
-
-源码：
-
-```java
-public final class UnavailableObjectStorageGateway
-        implements ObjectStorageGateway {
-
-    @Override
-    public void put(
-            String objectKey,
-            byte[] content,
-            String contentType
-    ) {
-        throw new BusinessException(
-                PrizeErrorCode.OSS_CONFIG_UNAVAILABLE
-        );
-    }
-}
-```
-
-当以下任一情况发生：
-
-```text
-OSS_ENABLED=false
-Region 为空
-Endpoint 为空
-Bucket 为空
-AccessKey ID 为空
-AccessKey Secret 为空
-Public Base URL 为空
-```
-
-上传会返回：
-
-```text
-错误码：51002
-HTTP：503 Service Unavailable
-消息：对象存储尚未配置
-```
-
----
-
-## 12. `PrizeImageController`：HTTP 上传入口
-
-类级路径：
-
-```java
-@RestController
-@RequestMapping("/api/admin/prize-images")
-public class PrizeImageController {
-}
-```
-
-方法：
-
-```java
-@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-@ResponseStatus(HttpStatus.CREATED)
-@Operation(summary = "上传奖品图片")
-@RequirePermission(PermissionCodes.PRIZE_IMAGE_UPLOAD)
-public ApiResponse<ImageUploadView> upload(
-        @RequestPart("file") MultipartFile file
-) {
-    return ApiResponse.success(service.upload(file));
-}
-```
-
-### 12.1 为什么使用 multipart/form-data
-
-JSON 适合传输结构化文本：
-
-```json
-{
-  "prizeName": "咖啡券"
-}
-```
-
-图片是二进制数据，更适合使用：
-
-```text
-multipart/form-data
-```
-
-请求示意：
+请求头中有：
 
 ```http
-POST /api/admin/prize-images
-Authorization: Bearer eyJ...
-Content-Type: multipart/form-data; boundary=...
-
---boundary
-Content-Disposition: form-data; name="file"; filename="prize.png"
-Content-Type: image/png
-
-<图片二进制>
---boundary--
+Authorization: Bearer 你的Token
 ```
 
-### 12.2 `@RequestPart("file")`
+`AuthenticationFilter` 会读取并验证这个 Token。验证通过后，系统才知道当前用户是谁。
 
-它要求 multipart 字段名必须为：
+没有 Token、Token 过期或 Token 无效时，请求不会进入上传 Controller。
 
-```text
-file
-```
+### 3.2 PermissionInterceptor：确认“你能做什么”
 
-如果 Postman 中写成：
-
-```text
-image
-picture
-upload
-```
-
-Spring 无法绑定到该参数。
-
-### 12.3 `201 Created`
-
-图片成功上传后使用 HTTP 201，表示服务端成功创建了一个新的 OSS Object。
-
-### 12.4 权限校验
+上传方法上写了：
 
 ```java
 @RequirePermission(PermissionCodes.PRIZE_IMAGE_UPLOAD)
 ```
 
-对应权限编码：
+常量的实际值是：
+
+```java
+public static final String PRIZE_IMAGE_UPLOAD = "prize:image:upload";
+```
+
+拦截器会检查当前用户是否拥有：
 
 ```text
 prize:image:upload
 ```
 
-请求在执行 Controller 之前已经经过：
+数据库迁移 `V3__add_prize_management_permissions.sql` 创建了这个权限，并把它授予管理员角色。
+
+这两个组件的职责不同：
 
 ```text
-AuthenticationFilter
-    ↓ 检查 Bearer Token、JWT、Redis Session
-PermissionInterceptor
-    ↓ 检查 prize:image:upload
-PrizeImageController
+AuthenticationFilter：验证身份
+PermissionInterceptor：验证权限
 ```
 
-没有 Token 返回 401，没有权限返回 403。
+身份验证通过，不代表一定有上传权限。
 
 ---
 
-## 13. 奖品图片权限如何初始化
+# 第二段：Controller 接住请求
 
-Flyway V3 创建五个奖品权限，其中图片上传权限为：
+## 4. 为什么需要 PrizeImageController
 
-```sql
-SELECT 'prize:image:upload', '上传奖品图片'
-```
-
-然后通过业务编码找到 `ADMIN`：
-
-```sql
-WHERE admin_role.role_code = 'ADMIN'
-```
-
-再把五个奖品权限关联给管理员角色。
-
-迁移没有假设固定 `role_id` 或 `permission_id`，而是按：
+身份和权限通过后，Spring 要找到一个 Java 方法处理：
 
 ```text
-role_code
-permission_code
+POST /api/admin/prize-images
 ```
 
-查询每个环境里的真实自增 ID。
-
-如果升级后旧管理员仍然返回 403，可能是 Redis 中存在旧权限缓存。权限缓存 TTL 为 10 分钟，缓存过期后会重新查询数据库。
-
----
-
-## 14. `PrizeImageValidator`：为什么不能只检查扩展名
-
-用户把文件命名成：
+现在缺少的是：
 
 ```text
-3.png
+HTTP 请求与 Java 方法之间的入口。
 ```
 
-并不能证明它真的是 PNG。
-
-扩展名只是文件名的一部分，下面操作不会转换图片：
-
-```text
-3.webp → 重命名 → 3.png
-```
-
-攻击者也可能把脚本、HTML 或其他内容改名成 `.png`。
-
-所以当前校验同时检查：
-
-1. 文件是否为空；
-2. 文件大小；
-3. 客户端声明的 Content-Type；
-4. 文件真实 Magic Bytes；
-5. 声明类型与真实类型是否一致。
-
-### 14.1 空文件校验
+所以我们编写了 `PrizeImageController`：
 
 ```java
-if (file == null || file.isEmpty()) {
-    throw new BusinessException(
-            PrizeErrorCode.IMAGE_EMPTY
-    );
+@RestController
+@RequestMapping("/api/admin/prize-images")
+public class PrizeImageController {
+
+    private final PrizeImageService service;
+
+    public PrizeImageController(PrizeImageService service) {
+        this.service = service;
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @RequirePermission(PermissionCodes.PRIZE_IMAGE_UPLOAD)
+    public ApiResponse<ImageUploadView> upload(
+            @RequestPart("file") MultipartFile file
+    ) {
+        return ApiResponse.success(service.upload(file));
+    }
 }
 ```
 
-返回：
+下面按执行顺序解释。
 
-```text
-41002 图片为空
-```
-
-### 14.2 文件大小校验
+### 4.1 `@RestController`
 
 ```java
-static final long MAX_IMAGE_BYTES =
-        5L * 1024 * 1024;
+@RestController
 ```
 
-这表示：
+告诉 Spring：
+
+```text
+这个类负责处理 HTTP 请求；
+方法返回的 Java 对象要转换成 JSON。
+```
+
+如果方法返回 `ImageUploadView`，Spring 会使用 Jackson 把它转换为 JSON，而不是去寻找一个 HTML 页面。
+
+### 4.2 `@RequestMapping`
+
+```java
+@RequestMapping("/api/admin/prize-images")
+```
+
+定义这个类下面所有接口共同的路径。
+
+### 4.3 `@PostMapping`
+
+```java
+@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+```
+
+表示：
+
+```text
+只接收 POST 请求；
+请求类型必须是 multipart/form-data。
+```
+
+类路径和方法路径合并后得到：
+
+```text
+POST /api/admin/prize-images
+```
+
+### 4.4 `@RequestPart("file")`
+
+```java
+@RequestPart("file") MultipartFile file
+```
+
+告诉 Spring：
+
+```text
+请从 multipart 请求中找到名字为 file 的部分，
+并转换成 MultipartFile 后传给这个参数。
+```
+
+这就是为什么 Postman 的 Key 必须填写 `file`。
+
+### 4.5 `@ResponseStatus(HttpStatus.CREATED)`
+
+上传成功后返回：
+
+```text
+HTTP 201 Created
+```
+
+201 表示服务器成功创建了一个新资源。这里的新资源就是 OSS 中的新对象。
+
+### 4.6 构造器注入
+
+Controller 不自己创建 Service：
+
+```java
+private final PrizeImageService service;
+
+public PrizeImageController(PrizeImageService service) {
+    this.service = service;
+}
+```
+
+Spring 启动时已经创建了 `PrizeImageService`，然后通过构造器交给 Controller。
+
+这叫“依赖注入”：
+
+```text
+PrizeImageController 需要 PrizeImageService，
+但不负责 new PrizeImageService(...)。
+```
+
+优点是 Controller 更容易测试，也不用知道 Service 还有哪些依赖。
+
+### 4.7 Controller 为什么只有一行
+
+```java
+return ApiResponse.success(service.upload(file));
+```
+
+Controller 的职责只是：
+
+```text
+接收 HTTP 输入 → 调用业务逻辑 → 包装 HTTP 输出
+```
+
+它不应该负责识别 PNG、不应该生成 OSS 路径，也不应该直接调用阿里云。
+
+如果把所有逻辑都塞进 Controller，以后命令行任务或其他接口想复用上传能力时，就只能复制代码。
+
+因此，下一步把 `MultipartFile` 交给：
+
+```text
+PrizeImageService.upload(file)
+```
+
+---
+
+# 第三段：Service 组织整个上传流程
+
+## 5. 为什么需要 PrizeImageService
+
+现在 Controller 已经拿到文件，但还缺少一个对象来安排整个业务步骤：
+
+```text
+1. 校验文件
+2. 生成 OSS Object Key
+3. 上传 OSS
+4. 生成公开 URL
+5. 返回结果
+```
+
+这个“流程编排者”就是 `PrizeImageService`。
+
+它的核心方法是：
+
+```java
+public ImageUploadView upload(MultipartFile file) {
+    ValidatedImage image = validator.validate(file);
+
+    String objectKey = "prizes/%s/%s.%s".formatted(
+            LocalDate.now(clock).format(PATH_DATE),
+            uuidSupplier.get(),
+            image.extension()
+    );
+
+    gateway.put(objectKey, image.content(), image.contentType());
+
+    String url = properties.normalizedPublicBaseUrl()
+            + "/"
+            + objectKey;
+
+    return new ImageUploadView(url, objectKey);
+}
+```
+
+不要急着一次理解完。接下来跟着程序一行一行执行。
+
+---
+
+# 第四段：上传前先验证文件
+
+## 6. 第一行：`validator.validate(file)`
+
+Service 执行的第一行是：
+
+```java
+ValidatedImage image = validator.validate(file);
+```
+
+### 现在缺少什么
+
+`MultipartFile` 只是 Spring 收到的文件，它保存的是客户端提供的信息。
+
+我们还不知道：
+
+- 文件是不是空的；
+- 文件是否超过 5MiB；
+- 文件字节到底是不是图片；
+- 它是真 PNG、JPEG 还是 WebP；
+- 客户端声明的类型和真实类型是否一致。
+
+如果不校验就上传，会出现：
+
+- 非图片文件进入 OSS；
+- 攻击者上传伪装文件；
+- 超大文件消耗带宽和存储；
+- 扩展名和真实内容不一致；
+- 浏览器拿到错误的 `Content-Type`。
+
+所以我们单独编写：
+
+```text
+PrizeImageValidator
+```
+
+它的工作只有一个：
+
+```text
+把“不可信的 MultipartFile”
+转换为“已经验证过的 ValidatedImage”。
+```
+
+---
+
+## 7. 校验第一步：文件不能为空
+
+```java
+if (file == null || file.isEmpty()) {
+    throw new BusinessException(PrizeErrorCode.IMAGE_EMPTY);
+}
+```
+
+逐项解释：
+
+```text
+file == null
+```
+
+表示根本没有拿到文件对象。
+
+```text
+file.isEmpty()
+```
+
+表示对象存在，但没有实际内容。
+
+失败后抛出：
+
+```java
+new BusinessException(PrizeErrorCode.IMAGE_EMPTY)
+```
+
+`BusinessException` 是项目统一的业务异常。全局异常处理器会把它转换成结构一致的错误 JSON。
+
+`IMAGE_EMPTY` 对应业务错误码 `41002`。
+
+这样 Controller 不需要在每个方法中重复编写 `try/catch`。
+
+---
+
+## 8. 校验第二步：文件不能超过 5MiB
+
+```java
+static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+```
+
+这里使用 `long`，因为文件大小可能超过 `int` 的安全范围。
+
+计算过程：
 
 ```text
 5 × 1024 × 1024 = 5,242,880 字节
 ```
 
-代码在读取前后检查两次：
+第一次判断：
 
 ```java
 if (file.getSize() > MAX_IMAGE_BYTES) {
-    // 41004
-}
-
-byte[] content = file.getBytes();
-
-if (content.length > MAX_IMAGE_BYTES) {
-    // 41004
+    throw new BusinessException(PrizeErrorCode.IMAGE_TOO_LARGE);
 }
 ```
 
-第一次用 MultipartFile 元数据快速拒绝，第二次用真实读取到的字节数做防御性检查。
+`getSize()` 可以在读取全部内容之前判断大小。这样超大文件不会先被完整放入我们的 `byte[]`。
 
-### 14.3 JPEG 文件头
+随后读取字节：
 
 ```java
-FF D8 FF
+byte[] content;
+try {
+    content = file.getBytes();
+} catch (IOException exception) {
+    throw new BusinessException(PrizeErrorCode.OSS_UPLOAD_FAILED);
+}
 ```
 
-检测代码：
+为什么要转为 `byte[]`？
+
+因为后面要：
+
+- 检查文件头；
+- 把相同的已验证字节传给 OSS SDK。
+
+读取后又检查一次：
+
+```java
+if (content.length > MAX_IMAGE_BYTES) {
+    throw new BusinessException(PrizeErrorCode.IMAGE_TOO_LARGE);
+}
+```
+
+这是防御性检查。最终相信的是实际读到的字节数量。
+
+---
+
+## 9. 校验第三步：不能只看文件名
+
+很多初学实现会这样判断：
+
+```java
+file.getOriginalFilename().endsWith(".png")
+```
+
+这是不可靠的，因为改文件名不会改变文件内容：
+
+```text
+cat.exe  →  cat.png
+```
+
+所以我们的代码直接检查文件开头的固定字节，也就是“文件签名”或“魔数”。
+
+调用代码：
+
+```java
+ImageFormat format = detect(content);
+```
+
+### 9.1 JPEG 的文件头
 
 ```java
 if (startsWith(
         content,
-        new byte[]{
-            (byte) 0xFF,
-            (byte) 0xD8,
-            (byte) 0xFF
-        }
+        new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}
 )) {
     return ImageFormat.JPEG;
 }
 ```
 
-### 14.4 PNG 文件头
+JPEG 文件开头通常是：
 
-```java
-89 50 4E 47 0D 0A 1A 0A
+```text
+FF D8 FF
 ```
 
-检测代码：
+### 9.2 PNG 的文件头
 
 ```java
 if (startsWith(content, new byte[]{
-        (byte) 0x89,
-        0x50,
-        0x4E,
-        0x47,
-        0x0D,
-        0x0A,
-        0x1A,
-        0x0A
+        (byte) 0x89, 0x50, 0x4E, 0x47,
+        0x0D, 0x0A, 0x1A, 0x0A
 })) {
     return ImageFormat.PNG;
 }
 ```
 
-### 14.5 WebP 文件头
-
-WebP 是 RIFF 容器格式：
+PNG 的固定开头是：
 
 ```text
-字节 0～3：RIFF
-字节 8～11：WEBP
+89 50 4E 47 0D 0A 1A 0A
 ```
 
-十六进制：
-
-```text
-52 49 46 46 .... .... 57 45 42 50
-```
-
-检测代码：
+### 9.3 WebP 的文件头
 
 ```java
 if (content.length >= 12
@@ -1022,73 +641,134 @@ if (content.length >= 12
 }
 ```
 
-### 14.6 声明类型与真实类型必须一致
+WebP 的结构是：
+
+```text
+第 0～3 字节：RIFF
+第 4～7 字节：文件长度等信息
+第 8～11 字节：WEBP
+```
+
+所以只看开头的 `RIFF` 还不够，还要检查第 8～11 字节。
+
+### 9.4 `startsWith` 工具方法
 
 ```java
-ImageFormat format = detect(content);
+private boolean startsWith(byte[] content, byte[] signature) {
+    return content.length >= signature.length
+            && Arrays.equals(
+                    Arrays.copyOf(content, signature.length),
+                    signature
+            );
+}
+```
 
+它做两件事：
+
+```text
+1. 确认文件至少有签名那么长，避免数组越界；
+2. 截取文件开头并和标准签名比较。
+```
+
+我们把这段重复逻辑提取成方法，是为了让 PNG 和 JPEG 的判断代码更容易读。
+
+---
+
+## 10. 为什么还要比较 Content-Type
+
+识别真实格式后，代码继续执行：
+
+```java
 if (format == null
-        || !format.contentType.equals(
-                file.getContentType()
-        )) {
+        || !format.contentType.equals(file.getContentType())) {
     throw new BusinessException(
             PrizeErrorCode.IMAGE_TYPE_UNSUPPORTED
     );
 }
 ```
 
+这里检查两个问题：
+
+```text
+format == null
+```
+
+说明真实字节不是支持的 JPEG、PNG 或 WebP。
+
+```text
+真实格式的 contentType != 请求声明的 contentType
+```
+
+说明客户端声明与文件实际内容不一致。
+
 例如：
 
 ```text
-请求声明：image/png
-文件头识别：image/webp
-结果：41003
+文件真实格式：WebP
+请求声明类型：image/png
 ```
 
-这正是 `D:\3.png` 的实际情况。
+即使文件名叫 `3.png`，也会拒绝。
 
-它虽然叫 `3.png`，但文件头是：
+### 真实案例：为什么 `D:\3.png` 被拒绝
+
+我们检查到这个文件的前 16 个字节是：
 
 ```text
-52 49 46 46 16 E9 00 00 57 45 42 50
+52 49 46 46 16 E9 00 00 57 45 42 50 56 50 38 20
 ```
 
-所以真实格式是 WebP。正确做法有两个：
-
-1. 按 WebP 上传，声明 `image/webp`；
-2. 使用图片软件真正转码为 PNG。
-
-仅修改扩展名不能改变真实格式。
-
-### 14.7 `ImageFormat`
-
-内部枚举把三项信息绑定在一起：
-
-```java
-private enum ImageFormat {
-    JPEG("image/jpeg", "jpg"),
-    PNG("image/png", "png"),
-    WEBP("image/webp", "webp");
-}
-```
-
-验证通过后，后续代码使用后端识别出的扩展名，而不是直接信任原文件名。
-
-例如用户上传：
+把十六进制翻译成字符：
 
 ```text
-my-prize.final.VERSION.PNG
+52 49 46 46  → RIFF
+57 45 42 50  → WEBP
 ```
 
-只要真实内容和 `Content-Type` 是 PNG，最终 OSS Key 仍使用统一的小写：
+因此它的真实格式是 WebP，不是 PNG。
+
+如果 Postman 按 `.png` 声明：
 
 ```text
-UUID.png
+image/png
 ```
+
+校验器检测到：
+
+```text
+image/webp
+```
+
+两者不一致，所以返回：
+
+```text
+41003 仅支持 JPEG、PNG 和 WebP 图片
+```
+
+这说明系统不是“认不出 PNG”，而是成功发现了“扩展名与真实内容不一致”。
+
+正确做法是：
+
+- 把图片真正转换为 PNG；或者
+- 使用正确的 `.webp` 文件名并以 `image/webp` 上传。
+
+只改后缀不叫格式转换。
 
 ---
 
-## 15. `ValidatedImage`：校验后的可信数据
+## 11. 为什么要创建 ValidatedImage
+
+校验成功后返回：
+
+```java
+return new ValidatedImage(
+        content,
+        format.contentType,
+        format.extension
+);
+```
+
+它的定义非常短：
 
 ```java
 public record ValidatedImage(
@@ -1099,181 +779,682 @@ public record ValidatedImage(
 }
 ```
 
-它表示一张已经通过验证的图片：
+### 现在缺少什么
+
+校验器已经得到了三个可信结果：
 
 ```text
-content      → 真实文件字节
-contentType  → 后端确认的媒体类型
-extension    → 后端确认的扩展名
+真实文件字节
+真实 MIME 类型
+正确扩展名
 ```
 
-`PrizeImageService` 不再读取客户端原始文件名，也不再自己猜格式。
+我们需要把它们一起交回 Service。
 
-数据流：
+可以返回三个零散值吗？Java 方法只能直接返回一个值。也可以使用数组或 Map，但类型含义不清晰。
+
+所以创建 `ValidatedImage`，专门表达：
 
 ```text
-不可信 MultipartFile
-    ↓ PrizeImageValidator
-可信 ValidatedImage
-    ↓ PrizeImageService
-OSS 上传参数
+这是一张已经通过检查的图片。
 ```
+
+### `record` 是什么
+
+`record` 适合保存一组不可随意修改的数据。
+
+Java 会自动生成：
+
+```java
+image.content()
+image.contentType()
+image.extension()
+```
+
+还会生成构造器、`equals`、`hashCode` 和 `toString`。
+
+相比手写普通类，它减少了大量样板代码。
+
+此时控制权回到 Service：
+
+```java
+ValidatedImage image = validator.validate(file);
+```
+
+从这一行以后，Service 使用的是已验证数据，不再直接相信原始文件名。
 
 ---
 
-## 16. `PrizeImageService`：编排整个上传用例
+# 第五段：生成 OSS 中的对象地址
 
-服务依赖：
+## 12. 为什么需要 Object Key
 
-```java
-private final PrizeImageValidator validator;
-private final ObjectStorageGateway gateway;
-private final OssProperties properties;
-private final Clock clock;
-private final Supplier<UUID> uuidSupplier;
-```
-
-职责分别是：
-
-| 依赖 | 职责 |
-|---|---|
-| `validator` | 校验图片并识别真实格式 |
-| `gateway` | 把对象上传到存储服务 |
-| `properties` | 提供公开访问根地址 |
-| `clock` | 提供当前日期 |
-| `uuidSupplier` | 生成不会轻易冲突的对象名 |
-
-### 16.1 生产构造函数
-
-```java
-@Autowired
-public PrizeImageService(
-        PrizeImageValidator validator,
-        ObjectStorageGateway gateway,
-        OssProperties properties
-) {
-    this(
-            validator,
-            gateway,
-            properties,
-            Clock.systemUTC(),
-            UUID::randomUUID
-    );
-}
-```
-
-生产环境使用：
+OSS 可以理解成一个很大的对象仓库：
 
 ```text
-UTC 时钟
-随机 UUID
+Bucket
+ ├─ prizes/2026/07/abc.png
+ ├─ prizes/2026/07/def.webp
+ └─ prizes/2026/08/ghi.jpg
 ```
 
-使用 UTC 意味着在中国时间午夜附近，Object Key 中的日期可能仍是 UTC 的前一天。这不影响访问，只影响目录日期的展示。如果业务要求严格按中国日期分类，可以把时钟改成 `Asia/Shanghai`。
-
-### 16.2 为什么 Clock 和 UUID Supplier 可以注入
-
-如果测试直接使用：
-
-```java
-LocalDate.now()
-UUID.randomUUID()
-```
-
-测试结果每次都不同，很难断言完整 Object Key。
-
-当前设计允许测试传入：
+Bucket 中每个对象都必须有一个唯一名称，这个名称叫：
 
 ```text
-固定时间：2026-07-27
-固定 UUID：123e4567-e89b-12d3-a456-426614174000
+Object Key
 ```
 
-这样测试可以精确断言：
+现在我们有图片字节，但还没有决定它在 Bucket 中叫什么。
 
-```text
-prizes/2026/07/123e4567-e89b-12d3-a456-426614174000.png
-```
-
-### 16.3 上传方法逐行解析
-
-第一步，验证：
+所以 Service 生成：
 
 ```java
-ValidatedImage image =
-        validator.validate(file);
+String objectKey = "prizes/%s/%s.%s".formatted(
+        LocalDate.now(clock).format(PATH_DATE),
+        uuidSupplier.get(),
+        image.extension()
+);
 ```
 
-第二步，生成 Object Key：
+日期格式定义：
 
 ```java
-String objectKey =
-        "prizes/%s/%s.%s".formatted(
-                LocalDate.now(clock)
-                        .format(PATH_DATE),
-                uuidSupplier.get(),
-                image.extension()
-        );
+private static final DateTimeFormatter PATH_DATE =
+        DateTimeFormatter.ofPattern("yyyy/MM");
 ```
 
 假设：
 
 ```text
 日期：2026-07-27
-UUID：123e4567-e89b-12d3-a456-426614174000
-格式：PNG
-```
-
-生成：
-
-```text
-prizes/2026/07/123e4567-e89b-12d3-a456-426614174000.png
-```
-
-第三步，上传：
-
-```java
-gateway.put(
-        objectKey,
-        image.content(),
-        image.contentType()
-);
-```
-
-第四步，拼接公开 URL：
-
-```java
-String url =
-        properties.normalizedPublicBaseUrl()
-                + "/"
-                + objectKey;
-```
-
-假设：
-
-```text
-Public Base URL:
-https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com
-
-Object Key:
-prizes/2026/07/abc.png
+UUID：7c9e6679-7425-40de-944b-e07fc1f90ae7
+真实格式：PNG
 ```
 
 得到：
 
 ```text
-https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/abc.png
+prizes/2026/07/7c9e6679-7425-40de-944b-e07fc1f90ae7.png
 ```
 
-第五步，返回：
+每部分的作用：
+
+```text
+prizes/       表示奖品图片业务目录
+2026/07/      方便按月份查看和管理
+UUID          几乎不会重复，避免同名覆盖
+.png          使用校验器识别的真实扩展名
+```
+
+为什么不使用原文件名？
+
+```text
+logo.png
+```
+
+可能被很多用户重复上传。如果直接使用原名，后上传的文件可能覆盖先上传的文件；原名还可能包含空格、中文、路径字符或恶意字符。
+
+### 为什么注入 Clock 和 UUID Supplier
+
+生产构造器使用：
 
 ```java
-return new ImageUploadView(url, objectKey);
+Clock.systemUTC()
+UUID::randomUUID
 ```
+
+日期和随机 UUID 每次都会变化。如果在测试中直接调用它们，预期结果无法固定。
+
+所以另一个构造器允许测试传入固定的：
+
+```text
+Clock
+Supplier<UUID>
+```
+
+这样测试可以明确断言生成的 Object Key。这是一种“让不可预测因素可替换”的测试设计。
 
 ---
 
-## 17. `ImageUploadView` 和成功响应
+# 第六段：业务代码怎样调用 OSS
+
+## 13. 为什么不在 Service 中直接写阿里云 SDK
+
+Object Key 已经生成，下一步是：
+
+```java
+gateway.put(objectKey, image.content(), image.contentType());
+```
+
+第一次看到可能会问：
+
+```text
+为什么不直接在 PrizeImageService 中 new OSSClient？
+```
+
+如果直接依赖阿里云 SDK，Service 会同时承担：
+
+- 奖品图片业务流程；
+- 阿里云客户端创建；
+- AccessKey 配置；
+- PutObject 请求拼装；
+- 云服务异常处理。
+
+以后改成腾讯云、MinIO 或本地存储时，还要修改业务 Service。
+
+所以现在缺少一个稳定的“存储能力接口”：
+
+```java
+public interface ObjectStorageGateway extends AutoCloseable {
+
+    void put(
+            String objectKey,
+            byte[] content,
+            String contentType
+    );
+
+    @Override
+    default void close() throws Exception {
+    }
+}
+```
+
+这个接口只表达业务真正需要的能力：
+
+```text
+请把这些字节，以这个类型，保存到这个 Object Key。
+```
+
+它不暴露阿里云 SDK 的类型。
+
+### interface 在这里解决了什么
+
+`PrizeImageService` 依赖：
+
+```text
+ObjectStorageGateway
+```
+
+而不是依赖：
+
+```text
+AliyunOssObjectStorageGateway
+```
+
+因此可以替换实现：
+
+```text
+生产环境 → AliyunOssObjectStorageGateway
+配置缺失 → UnavailableObjectStorageGateway
+单元测试 → FakeObjectStorageGateway
+未来切换 → MinioObjectStorageGateway
+```
+
+Service 的业务代码不需要改变。
+
+这就是“面向接口编程”最实际的用途，不是为了多写一个文件。
+
+---
+
+## 14. 应用启动时，Gateway 从哪里来
+
+Service 的构造器需要：
+
+```java
+ObjectStorageGateway gateway
+```
+
+但是接口不能直接 `new`，因为接口没有具体实现。
+
+现在缺少的是：
+
+```text
+启动时根据 OSS 配置，选择并创建一个具体实现。
+```
+
+这由 `OssConfiguration` 完成：
+
+```java
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(OssProperties.class)
+public class OssConfiguration {
+
+    @Bean
+    public ObjectStorageGateway objectStorageGateway(
+            OssProperties properties
+    ) {
+        if (!properties.enabled() || !properties.isComplete()) {
+            return new UnavailableObjectStorageGateway();
+        }
+
+        OSSClient client = OSSClient.newBuilder()
+                .region(properties.region())
+                .endpoint(properties.endpoint())
+                .credentialsProvider(
+                        new StaticCredentialsProvider(
+                                properties.accessKeyId(),
+                                properties.accessKeySecret()
+                        )
+                )
+                .build();
+
+        return new AliyunOssObjectStorageGateway(
+                client,
+                properties.bucket()
+        );
+    }
+}
+```
+
+### `@Configuration`
+
+告诉 Spring：这个类负责创建和配置其他对象。
+
+### `@Bean`
+
+告诉 Spring：把方法返回的对象放入 Spring 容器。
+
+以后某个构造器需要 `ObjectStorageGateway` 时，Spring 就把这里创建的对象注入进去。
+
+### 两个分支
+
+配置完整且启用：
+
+```text
+AliyunOssObjectStorageGateway
+```
+
+未启用或配置不完整：
+
+```text
+UnavailableObjectStorageGateway
+```
+
+后者的代码是：
+
+```java
+public void put(
+        String objectKey,
+        byte[] content,
+        String contentType
+) {
+    throw new BusinessException(
+            PrizeErrorCode.OSS_CONFIG_UNAVAILABLE
+    );
+}
+```
+
+这样应用可以正常启动，但有人真正上传时，会得到明确的 `51002 OSS 配置不可用`，而不是含糊的空指针异常。
+
+---
+
+# 第七段：配置怎样从 .env 进入 Java
+
+## 15. `.env → application.yaml → OssProperties`
+
+创建 OSS 客户端需要：
+
+```text
+是否启用
+Region
+Endpoint
+Bucket
+AccessKey ID
+AccessKey Secret
+公开访问域名
+```
+
+敏感信息不能硬编码到 Java，也不能提交到 Git。
+
+本地 `.env` 示例：
+
+```properties
+OSS_ENABLED=true
+OSS_REGION=cn-hangzhou
+OSS_ENDPOINT=https://oss-cn-hangzhou.aliyuncs.com
+OSS_BUCKET=你的Bucket名称
+OSS_ACCESS_KEY_ID=你的AccessKeyId
+OSS_ACCESS_KEY_SECRET=你的AccessKeySecret
+OSS_PUBLIC_BASE_URL=https://你的Bucket名称.oss-cn-hangzhou.aliyuncs.com
+```
+
+`application.yaml` 首先加载 `.env`：
+
+```yaml
+spring:
+  config:
+    import: optional:file:.env[.properties]
+```
+
+`optional` 表示没有 `.env` 时应用也可以尝试启动。
+
+然后把环境变量映射到项目配置：
+
+```yaml
+luckyhub:
+  oss:
+    enabled: ${OSS_ENABLED:false}
+    region: ${OSS_REGION:}
+    endpoint: ${OSS_ENDPOINT:}
+    bucket: ${OSS_BUCKET:}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
+```
+
+例如：
+
+```text
+OSS_REGION=cn-hangzhou
+        ↓
+luckyhub.oss.region=cn-hangzhou
+```
+
+最后由 Spring 绑定为：
+
+```java
+@ConfigurationProperties(prefix = "luckyhub.oss")
+public record OssProperties(
+        boolean enabled,
+        String region,
+        String endpoint,
+        String bucket,
+        String accessKeyId,
+        String accessKeySecret,
+        String publicBaseUrl
+) {
+}
+```
+
+配置名称会自动转换：
+
+```text
+access-key-id     → accessKeyId
+public-base-url   → publicBaseUrl
+```
+
+所以完整数据流是：
+
+```text
+.env
+  OSS_ACCESS_KEY_ID
+        ↓
+application.yaml
+  luckyhub.oss.access-key-id
+        ↓
+OssProperties
+  accessKeyId()
+        ↓
+OssConfiguration
+        ↓
+StaticCredentialsProvider
+        ↓
+OSSClient
+```
+
+### `isComplete()` 是干什么的
+
+```java
+public boolean isComplete() {
+    return StringUtils.hasText(region)
+            && StringUtils.hasText(endpoint)
+            && StringUtils.hasText(bucket)
+            && StringUtils.hasText(accessKeyId)
+            && StringUtils.hasText(accessKeySecret)
+            && StringUtils.hasText(publicBaseUrl);
+}
+```
+
+它集中检查所有必填配置是否有内容。
+
+如果把这些判断散落在不同类中，很容易漏掉某项，而且错误行为不一致。
+
+### `normalizedPublicBaseUrl()` 是干什么的
+
+```java
+public String normalizedPublicBaseUrl() {
+    if (!StringUtils.hasText(publicBaseUrl)) {
+        return "";
+    }
+    return publicBaseUrl.trim().replaceAll("/+$", "");
+}
+```
+
+它会：
+
+```text
+去掉首尾空格；
+去掉末尾一个或多个 /。
+```
+
+例如：
+
+```text
+输入：https://example.com///
+输出：https://example.com
+```
+
+这样稍后拼接 `"/" + objectKey` 时不会出现双斜杠。
+
+---
+
+## 16. AccessKey 和 Bucket 是怎样联系起来的
+
+这里容易产生一个误解：
+
+```text
+是不是创建 AccessKey 时，要把它和某个 Bucket 绑定？
+```
+
+不是由 LuckyHub 在本地“绑定”的。
+
+调用 OSS 时，请求同时携带：
+
+```text
+1. 目标 Bucket：properties.bucket()
+2. 身份凭证：AccessKey ID + AccessKey Secret
+3. 要执行的操作：PutObject
+4. Object Key：prizes/2026/07/xxx.png
+```
+
+阿里云收到请求后会做类似判断：
+
+```text
+这个 AccessKey 代表哪个 RAM 用户？
+        ↓
+这个 RAM 用户拥有哪些权限策略？
+        ↓
+策略是否允许对这个 Bucket 执行 oss:PutObject？
+        ↓
+允许：上传
+拒绝：返回 AccessDenied
+```
+
+所以真正建立联系的是阿里云 RAM 权限策略。
+
+一个 AccessKey 可以有多个 Bucket 的权限；一个 Bucket 也可以允许多个 RAM 用户访问。关键不是“创建了第几个 AccessKey”，而是该 AccessKey 所属身份的权限策略。
+
+最小权限思想是只允许它操作需要的 Bucket 和动作，不要为了省事长期使用拥有全部权限的主账号 AccessKey。
+
+---
+
+# 第八段：真正调用阿里云 OSS
+
+## 17. AliyunOssObjectStorageGateway 做了什么
+
+Service 调用：
+
+```java
+gateway.put(objectKey, image.content(), image.contentType());
+```
+
+在配置完整时，`gateway` 的实际对象是：
+
+```text
+AliyunOssObjectStorageGateway
+```
+
+核心代码：
+
+```java
+@Override
+public void put(
+        String objectKey,
+        byte[] content,
+        String contentType
+) {
+    PutObjectRequest request = PutObjectRequest.newBuilder()
+            .bucket(bucket)
+            .key(objectKey)
+            .contentType(contentType)
+            .body(BinaryData.fromBytes(content))
+            .build();
+
+    try {
+        client.putObject(request);
+    } catch (RuntimeException exception) {
+        throw new BusinessException(
+                PrizeErrorCode.OSS_UPLOAD_FAILED
+        );
+    }
+}
+```
+
+逐行解释。
+
+### `.bucket(bucket)`
+
+告诉阿里云把对象放进哪个 Bucket。
+
+值来自：
+
+```text
+OSS_BUCKET
+```
+
+### `.key(objectKey)`
+
+指定对象在 Bucket 中的唯一名称，例如：
+
+```text
+prizes/2026/07/7c9e....png
+```
+
+OSS 没有传统磁盘的真实文件夹。这里的 `/` 是 Object Key 的一部分，控制台只是把它显示成目录。
+
+### `.contentType(contentType)`
+
+把真实类型写入 OSS 对象元数据，例如：
+
+```text
+image/png
+```
+
+浏览器访问公开 URL 时，OSS 会返回这个响应类型。设置正确后，浏览器通常会直接显示图片。
+
+### `.body(BinaryData.fromBytes(content))`
+
+把 Java 的 `byte[]` 转换成 OSS SDK 接受的请求体。
+
+### `.build()`
+
+前面使用 Builder 一项一项填写参数，`build()` 最终生成不可继续修改的 `PutObjectRequest`。
+
+Builder 模式适合参数较多、部分参数可选的对象。
+
+### `client.putObject(request)`
+
+这一行才真正发起网络请求：
+
+```text
+LuckyHub → 阿里云 OSS
+```
+
+在它之前都只是准备数据和构造请求。
+
+如果网络失败、签名错误、Bucket 不存在或权限不足，SDK 会抛异常。
+
+我们把 SDK 异常转换为统一业务异常：
+
+```java
+throw new BusinessException(
+        PrizeErrorCode.OSS_UPLOAD_FAILED
+);
+```
+
+对应错误码 `51001` 和 HTTP 502。
+
+为什么不直接把阿里云异常返回给前端？
+
+- SDK 异常结构可能改变；
+- 原始消息可能包含内部实现信息；
+- 前端需要稳定的业务错误码；
+- 上层业务不应该依赖某一家云厂商的异常类型。
+
+---
+
+# 第九段：上传成功后生成公开 URL
+
+## 18. OSS 上传成功为什么没有直接得到我们要保存的 URL
+
+`putObject` 的主要结果是“对象已经保存成功”，业务仍然需要一个浏览器能访问的地址。
+
+现在我们已知：
+
+```text
+公开基础地址：
+https://example-bucket.oss-cn-hangzhou.aliyuncs.com
+
+Object Key：
+prizes/2026/07/7c9e....png
+```
+
+Service 拼接：
+
+```java
+String url = properties.normalizedPublicBaseUrl()
+        + "/"
+        + objectKey;
+```
+
+得到：
+
+```text
+https://example-bucket.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/7c9e....png
+```
+
+如果使用自定义 CDN 域名：
+
+```properties
+OSS_PUBLIC_BASE_URL=https://img.example.com
+```
+
+代码无需修改，生成的 URL 会变为：
+
+```text
+https://img.example.com/prizes/2026/07/7c9e....png
+```
+
+需要注意：
+
+```text
+拼出了 URL，不等于匿名用户一定能访问。
+```
+
+Bucket 必须允许相应的公开读取，或通过 CDN/签名 URL 提供访问。当前项目保存的是公开 URL，因此部署时要保证这个地址确实可读。
+
+---
+
+## 19. 为什么返回 ImageUploadView
+
+上传完成后，前端需要两个结果：
+
+```text
+url：给浏览器展示，并保存到奖品表
+objectKey：标识 OSS 中的对象，便于以后管理
+```
+
+所以创建：
 
 ```java
 public record ImageUploadView(
@@ -1283,438 +1464,322 @@ public record ImageUploadView(
 }
 ```
 
-成功响应：
+Service 返回：
+
+```java
+return new ImageUploadView(url, objectKey);
+```
+
+Controller 再包装：
+
+```java
+return ApiResponse.success(service.upload(file));
+```
+
+最终 Spring 转换成类似 JSON：
 
 ```json
 {
   "code": 0,
   "message": "success",
   "data": {
-    "url": "https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/abc.png",
-    "objectKey": "prizes/2026/07/abc.png"
+    "url": "https://example-bucket.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/7c9e6679-7425-40de-944b-e07fc1f90ae7.png",
+    "objectKey": "prizes/2026/07/7c9e6679-7425-40de-944b-e07fc1f90ae7.png"
   }
 }
 ```
 
-两个字段用途不同：
+到这里，第一个 POST 请求结束。
 
-| 字段 | 用途 |
-|---|---|
-| `url` | 前端展示图片、保存到奖品表 |
-| `objectKey` | 将来删除、迁移、审计 OSS 对象时使用 |
+此时：
 
-当前数据库只保存公开 URL，没有单独保存 Object Key。
-
-如果将来需要删除旧图，建议在数据库中同时保存 Object Key，或者可靠地从 URL 解析 Object Key。
+```text
+OSS 中：已经有图片
+marketing_prize 表中：还没有保存图片 URL
+```
 
 ---
 
-## 18. 公开 URL 怎样保存到数据库
+# 第十段：把 URL 保存到奖品表
 
-上传成功后，前端拿到：
+## 20. 为什么上传接口不直接写数据库
 
-```json
-{
-  "url": "https://.../prizes/2026/07/abc.png"
-}
-```
+上传接口只知道“一张图片上传成功了”，它还不知道：
 
-然后调用创建奖品接口：
+- 奖品名称是什么；
+- 奖品类型是什么；
+- 奖品等级是什么；
+- 是否允许叠加；
+- 这张图属于新奖品还是已有奖品。
+
+所以不能在图片上传接口中凭空创建奖品。
+
+前端拿到 `data.url` 后，再发送创建奖品请求：
 
 ```http
 POST /api/admin/prizes
-Authorization: Bearer <token>
+Authorization: Bearer 你的Token
 Content-Type: application/json
 ```
 
-请求：
+示例 JSON：
 
 ```json
 {
-  "prizeName": "一等奖咖啡券",
-  "prizeType": "COUPON",
+  "prizeName": "一等奖机械键盘",
+  "prizeType": "PHYSICAL",
   "prizeLevel": "FIRST",
-  "imageUrl": "https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/abc.png",
-  "description": "可以兑换一杯咖啡",
+  "imageUrl": "https://example-bucket.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/7c9e6679-7425-40de-944b-e07fc1f90ae7.png",
+  "description": "抽中后由工作人员发放",
   "stackable": false
 }
 ```
 
-DTO 对 URL 的限制：
-
-```java
-@Size(
-    max = 500,
-    message = "奖品图片地址不能超过500个字符"
-)
-String imageUrl
-```
-
-服务映射：
-
-```java
-prize.setImageUrl(normalize(imageUrl));
-```
-
-空白字符串会被转换成 `null`：
-
-```java
-private String normalize(String value) {
-    return StringUtils.hasText(value)
-            ? value.trim()
-            : null;
-}
-```
-
-实体字段：
-
-```java
-private String imageUrl;
-```
-
-MyBatis-Plus 根据驼峰映射：
+执行链路：
 
 ```text
-imageUrl → image_url
+PrizeController
+    ↓
+PrizeServiceImpl
+    ↓
+Prize.setImageUrl(...)
+    ↓
+PrizeMapper / MyBatis-Plus
+    ↓
+marketing_prize.image_url
 ```
 
-数据库列：
-
-```sql
-image_url VARCHAR(500) NULL COMMENT '图片地址'
-```
-
-最终数据示例：
-
-```text
-marketing_prize
-┌────┬────────────────┬──────────────────────────────────────────────┐
-│ id │ prize_name     │ image_url                                    │
-├────┼────────────────┼──────────────────────────────────────────────┤
-│ 1  │ 一等奖咖啡券   │ https://.../prizes/2026/07/abc.png           │
-└────┴────────────────┴──────────────────────────────────────────────┘
-```
-
-修改奖品时流程相同：
+修改奖品时也是同样原理：
 
 ```http
 PUT /api/admin/prizes/{id}
 ```
 
-把新上传图片的 URL 放进 `imageUrl`，`updateById` 会更新数据库。
+JSON 中带上新的 `imageUrl`，数据库字段就会更新。
 
-当前版本不会自动删除 OSS 中的旧图片。
+### 一个完整的前端操作顺序
+
+```text
+1. 用户选择图片
+2. 前端调用图片上传接口
+3. 后端返回 URL
+4. 前端把 URL 显示在预览框
+5. 用户填写奖品名称、等级等
+6. 用户点击“创建奖品”
+7. 前端把 URL 和其他字段一起作为 JSON 提交
+8. 后端把 URL 保存到 image_url
+```
+
+如果第 3 步成功，但用户关闭页面，没有执行第 6 步，OSS 中会留下未关联奖品的图片。当前版本接受这种情况；将来可以增加定时清理或“确认使用”机制。
 
 ---
 
-## 19. 为什么上传和创建奖品不是一个事务
+# 第十一段：把一次请求完整跑一遍
 
-数据库事务只能可靠控制 MySQL：
+## 21. 正常 PNG 的逐步执行示例
+
+假设输入：
+
+```text
+文件名：prize.png
+请求声明类型：image/png
+大小：120,000 字节
+文件头：89 50 4E 47 0D 0A 1A 0A
+```
+
+执行过程如下：
+
+| 顺序 | 当前对象 | 做什么 | 产生什么 |
+|---:|---|---|---|
+| 1 | Postman | 发送 multipart POST | HTTP 请求 |
+| 2 | Spring | 解析名为 `file` 的部分 | `MultipartFile` |
+| 3 | AuthenticationFilter | 验证 Token | 当前登录用户 |
+| 4 | PermissionInterceptor | 检查上传权限 | 允许进入 Controller |
+| 5 | PrizeImageController | 接收文件并调用 Service | `service.upload(file)` |
+| 6 | PrizeImageValidator | 检查非空和大小 | 继续 |
+| 7 | PrizeImageValidator | 读取 `byte[]` | 图片真实字节 |
+| 8 | PrizeImageValidator | 用文件头识别 PNG | `image/png`、`png` |
+| 9 | PrizeImageValidator | 对比声明类型 | `ValidatedImage` |
+| 10 | PrizeImageService | 日期 + UUID + 扩展名 | Object Key |
+| 11 | ObjectStorageGateway | 抽象存储调用 | 进入阿里云实现 |
+| 12 | AliyunOssObjectStorageGateway | 创建 PutObjectRequest | OSS 请求对象 |
+| 13 | OSSClient | 发送网络请求 | OSS 保存图片 |
+| 14 | PrizeImageService | 基础域名 + Object Key | 公开 URL |
+| 15 | ImageUploadView | 保存返回字段 | Java 返回对象 |
+| 16 | Spring/Jackson | 把对象序列化 | JSON 响应 |
+
+用一句话概括数据的变化：
+
+```text
+HTTP 二进制
+→ MultipartFile
+→ byte[]
+→ ValidatedImage
+→ PutObjectRequest
+→ OSS Object
+→ URL
+→ ImageUploadView
+→ JSON
+```
+
+---
+
+# 第十二段：下次自己从零实现时怎么写
+
+## 22. 推荐实现顺序
+
+以后为其他业务实现文件上传，可以按照下面顺序。
+
+### 第 1 步：先定义接口契约
+
+先明确：
+
+```text
+路径是什么？
+请求方法是什么？
+form-data 的字段名是什么？
+允许哪些格式？
+最大多大？
+成功返回什么？
+```
+
+本项目答案：
+
+```text
+POST /api/admin/prize-images
+字段名：file
+格式：JPEG、PNG、WebP
+业务大小：5MiB
+返回：url、objectKey
+```
+
+### 第 2 步：定义输出 VO
 
 ```java
-@Transactional
-public PrizeView create(...) {
-    mapper.insert(prize);
+public record ImageUploadView(
+        String url,
+        String objectKey
+) {
 }
 ```
 
-阿里云 OSS 是外部服务，普通 MySQL 事务不能回滚已经成功的 OSS PutObject。
+先定义输出，可以让 Controller 和 Service 的目标更清晰。
 
-可能出现：
+### 第 3 步：编写校验器
+
+把不可信输入变成可信数据：
 
 ```text
-OSS 上传成功
-    ↓
-用户关闭页面
-    ↓
-没有创建奖品
-    ↓
-OSS 留下一张孤立图片
+MultipartFile → ValidatedImage
 ```
 
-当前实现接受这个结果，换取流程简单。
+至少检查：
 
-将来的改进方式包括：
+- 空文件；
+- 文件大小；
+- 文件签名；
+- MIME 类型；
+- 支持的扩展名。
 
-1. 保存图片上传记录和状态；
-2. 创建奖品后把图片标记为已引用；
-3. 定时删除超过一定时间仍未引用的对象；
-4. 使用消息队列异步清理旧图；
-5. 保存 Object Key，避免依赖 URL 解析。
-
----
-
-## 20. 错误码怎样转换成 HTTP 响应
-
-奖品错误码：
+### 第 4 步：定义存储接口
 
 ```java
-IMAGE_EMPTY(
-    41002,
-    "奖品图片不能为空",
-    HttpStatus.BAD_REQUEST
-)
-
-IMAGE_TYPE_UNSUPPORTED(
-    41003,
-    "仅支持 JPEG、PNG 和 WebP 图片",
-    HttpStatus.BAD_REQUEST
-)
-
-IMAGE_TOO_LARGE(
-    41004,
-    "奖品图片不能超过5 MiB",
-    HttpStatus.CONTENT_TOO_LARGE
-)
-
-OSS_UPLOAD_FAILED(
-    51001,
-    "奖品图片上传失败",
-    HttpStatus.BAD_GATEWAY
-)
-
-OSS_CONFIG_UNAVAILABLE(
-    51002,
-    "对象存储尚未配置",
-    HttpStatus.SERVICE_UNAVAILABLE
-)
-```
-
-业务代码抛出：
-
-```java
-throw new BusinessException(
-        PrizeErrorCode.IMAGE_TYPE_UNSUPPORTED
+void put(
+        String objectKey,
+        byte[] content,
+        String contentType
 );
 ```
 
-`GlobalExceptionHandler` 捕获：
+先表达业务需要的最小能力，再实现具体云厂商。
+
+### 第 5 步：实现阿里云适配器
+
+负责把通用参数转换为：
+
+```text
+PutObjectRequest
+```
+
+并调用：
 
 ```java
-@ExceptionHandler(BusinessException.class)
-public ResponseEntity<ErrorResponse>
-handleBusinessException(...) {
-    return build(
-            exception.getErrorCode(),
-            exception.getMessage(),
-            request
-    );
-}
+client.putObject(request);
 ```
 
-最终响应示例：
+### 第 6 步：建立配置对象
 
-```json
-{
-  "code": 41003,
-  "message": "仅支持 JPEG、PNG 和 WebP 图片",
-  "data": null,
-  "requestId": "fa773314-1a4e-49ba-bc19-cbe4bea3124c",
-  "timestamp": 1785161817930
-}
+配置流保持清晰：
+
+```text
+.env → application.yaml → OssProperties → OSSClient
 ```
 
-`requestId` 可以把客户端错误与服务器日志对应起来。
+不要在代码里写死 AccessKey。
+
+### 第 7 步：编写 Service
+
+Service 只负责按顺序组织：
+
+```text
+校验 → 生成 Key → 上传 → 生成 URL → 返回
+```
+
+### 第 8 步：最后编写 Controller
+
+Controller 只做 HTTP 适配：
+
+```text
+接收 MultipartFile → 调 Service → 返回 JSON
+```
+
+### 第 9 步：补充权限和错误码
+
+至少区分：
+
+```text
+文件为空
+文件太大
+类型不支持
+OSS 未配置
+OSS 上传失败
+没有上传权限
+```
+
+### 第 10 步：编写测试
+
+不要只测试成功上传，还要测试每一个拒绝分支。
 
 ---
 
-## 21. 完整调用示例
+# 第十三段：代码为什么容易测试
 
-### 21.1 登录
+## 23. 测试时不应该真的上传阿里云
 
-```powershell
-$loginBody = @{
-    username = "admin"
-    password = "你的管理员密码"
-} | ConvertTo-Json
+单元测试如果每次都访问真实 OSS，会有这些问题：
 
-$login = Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://localhost:8080/api/auth/login" `
-    -ContentType "application/json; charset=utf-8" `
-    -Body ([System.Text.Encoding]::UTF8.GetBytes(
-        $loginBody
-    ))
+- 需要真实 AccessKey；
+- 依赖网络；
+- 运行慢；
+- 可能产生费用；
+- 会留下测试垃圾文件；
+- 阿里云暂时异常会导致本地测试失败。
 
-$token = $login.data.token
-```
-
-### 21.2 使用 curl 上传真实 PNG
-
-```powershell
-$imagePath = "D:\prize.png"
-
-curl.exe -i `
-  -X POST "http://localhost:8080/api/admin/prize-images" `
-  -H "Authorization: Bearer $token" `
-  -F "file=@$imagePath;type=image/png"
-```
-
-真实 JPEG：
-
-```powershell
-curl.exe -i `
-  -X POST "http://localhost:8080/api/admin/prize-images" `
-  -H "Authorization: Bearer $token" `
-  -F "file=@D:\prize.jpg;type=image/jpeg"
-```
-
-真实 WebP：
-
-```powershell
-curl.exe -i `
-  -X POST "http://localhost:8080/api/admin/prize-images" `
-  -H "Authorization: Bearer $token" `
-  -F "file=@D:\prize.webp;type=image/webp"
-```
-
-### 21.3 创建奖品
-
-假设上传返回：
-
-```text
-https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/abc.png
-```
-
-PowerShell：
-
-```powershell
-$prizeBody = @{
-    prizeName  = "一等奖咖啡券"
-    prizeType  = "COUPON"
-    prizeLevel = "FIRST"
-    imageUrl   = "https://luckyhub-prize.oss-cn-hangzhou.aliyuncs.com/prizes/2026/07/abc.png"
-    description = "可以兑换一杯咖啡"
-    stackable  = $false
-} | ConvertTo-Json
-
-Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://localhost:8080/api/admin/prizes" `
-    -Headers @{
-        Authorization = "Bearer $token"
-    } `
-    -ContentType "application/json; charset=utf-8" `
-    -Body ([System.Text.Encoding]::UTF8.GetBytes(
-        $prizeBody
-    ))
-```
-
-### 21.4 查询并确认 URL
-
-```powershell
-$page = Invoke-RestMethod `
-    -Method Get `
-    -Uri "http://localhost:8080/api/admin/prizes?page=1&size=20" `
-    -Headers @{
-        Authorization = "Bearer $token"
-    }
-
-$page.data.records |
-    Select-Object id, prizeName, imageUrl, status
-```
-
----
-
-## 22. 以 `D:\3.png` 为例分析失败过程
-
-请求：
-
-```text
-文件名：3.png
-请求 Content-Type：image/png
-```
-
-服务器读取前 12 个字节：
-
-```text
-52 49 46 46 16 E9 00 00 57 45 42 50
-```
-
-解析：
-
-```text
-52 49 46 46 → RIFF
-57 45 42 50 → WEBP
-```
-
-所以：
-
-```text
-声明类型：image/png
-真实类型：image/webp
-```
-
-执行路径：
-
-```text
-PrizeImageController.upload
-    ↓
-PrizeImageService.upload
-    ↓
-PrizeImageValidator.validate
-    ↓
-detect(content) 返回 WEBP
-    ↓
-WEBP.contentType != file.getContentType()
-    ↓
-BusinessException(IMAGE_TYPE_UNSUPPORTED)
-    ↓
-GlobalExceptionHandler
-    ↓
-HTTP 400 + code 41003
-```
-
-解决方式：
-
-```powershell
-Copy-Item `
-  -LiteralPath "D:\3.png" `
-  -Destination "D:\3.webp"
-
-curl.exe -i `
-  -X POST "http://localhost:8080/api/admin/prize-images" `
-  -H "Authorization: Bearer $token" `
-  -F "file=@D:\3.webp;type=image/webp"
-```
-
-或者使用画图、Photoshop、ImageMagick 等工具真正转换成 PNG。
-
----
-
-## 23. 自动化测试是怎样验证实现的
-
-### 23.1 `PrizeImageValidatorTests`
-
-覆盖四类行为：
-
-1. 空文件返回 `41002`；
-2. 超过 5 MiB 返回 `41004`；
-3. 不支持的格式或声明与文件头不一致返回 `41003`；
-4. 正确识别 JPEG、PNG、WebP。
-
-测试中的 PNG 不依赖文件扩展名，而是直接构造 PNG Magic Bytes：
+因为 Service 依赖接口：
 
 ```java
-new byte[]{
-    (byte) 0x89,
-    0x50,
-    0x4E,
-    0x47,
-    0x0D,
-    0x0A,
-    0x1A,
-    0x0A
-}
+ObjectStorageGateway
 ```
 
-### 23.2 `PrizeImageServiceTests`
-
-使用 CapturingGateway 代替真实 OSS：
+测试中可以传入假的实现，只记录收到的参数：
 
 ```java
-private static final class CapturingGateway
+class FakeObjectStorageGateway
         implements ObjectStorageGateway {
+
+    String objectKey;
+    byte[] content;
+    String contentType;
 
     @Override
     public void put(
@@ -1723,226 +1788,221 @@ private static final class CapturingGateway
             String contentType
     ) {
         this.objectKey = objectKey;
+        this.content = content;
         this.contentType = contentType;
     }
 }
 ```
 
-测试不会产生网络请求，但可以验证：
-
-- Object Key 格式；
-- 日期目录；
-- UUID；
-- 扩展名；
-- Content-Type；
-- 公开 URL 拼接。
-
-### 23.3 `OssConfigurationTests`
-
-验证两种启动状态：
+测试真正关心的是：
 
 ```text
-OSS disabled
-    → UnavailableObjectStorageGateway
-
-OSS enabled + complete
-    → AliyunOssObjectStorageGateway
+Service 有没有生成正确 Key？
+有没有把正确字节交给 Gateway？
+有没有生成正确 URL？
 ```
 
-同时验证公开地址末尾 `/` 会被移除。
+这再次说明 `ObjectStorageGateway` 不是多余的抽象，它让业务测试不依赖云服务。
 
-### 23.4 `PrizeImageControllerTests`
-
-验证：
-
-- 上传接口地址正确；
-- 成功状态为 201；
-- 响应包含 `url` 和 `objectKey`；
-- 方法要求 `prize:image:upload` 权限。
-
-这些测试没有使用真实 AccessKey，也不会上传到真实 Bucket。
-
-真实 OSS 是否可用仍需要集成测试或人工测试确认。
-
----
-
-## 24. 常见问题排查
-
-| 现象 | 可能原因 | 检查方法 |
-|---|---|---|
-| `401` | Token 缺失、JWT 过期、Redis Session 不存在 | 重新登录并携带 Bearer Token |
-| `403` | 用户没有 `prize:image:upload` | 检查 ADMIN 角色与权限缓存 |
-| `41002` | 没有文件或文件为空 | 检查 multipart 字段 `file` |
-| `41003` | 不支持的格式、Content-Type 错误、文件头不匹配 | 检查真实 Magic Bytes |
-| `41004` | 图片超过 5 MiB | 压缩图片 |
-| `51001` | Endpoint、Bucket、AccessKey、RAM 权限或网络错误 | 检查 OSS 配置与 RAM Policy |
-| `51002` | OSS 未启用或配置缺失 | 检查 `.env` 并重启应用 |
-| 上传成功但 URL 403 | Bucket 不是公共读或阻止公共访问生效 | 检查 Bucket ACL/Policy |
-| OSS 有文件但数据库没有 URL | 只上传了图片，没有创建/修改奖品 | 调用奖品 JSON 接口 |
-
-### 24.1 Netty TCP_KEEP 警告
-
-Windows 中可能看到：
+校验器测试则分别准备：
 
 ```text
-Unknown channel option 'TCP_KEEPCOUNT'
-Unknown channel option 'TCP_KEEPIDLE'
-Unknown channel option 'TCP_KEEPINTERVAL'
+空文件
+超过 5MiB 的文件
+真正的 PNG
+真正的 JPEG
+真正的 WebP
+伪装成 PNG 的 WebP
+完全不支持的字节
 ```
 
-这些通常来自 Redis/Lettuce 的 Netty 连接选项，与 OSS 图片格式校验没有直接关系。
-
-判断真正业务错误时，应查看：
+Controller 测试主要验证：
 
 ```text
-Business exception
-code=...
-message=...
+路由是否正确
+字段名是否为 file
+成功是否返回 201
+是否声明了 prize:image:upload 权限
+返回 JSON 是否正确
 ```
 
 ---
 
-## 25. 当前实现的安全边界
+# 第十四段：常见失败怎样定位
 
-已经具备：
+## 24. 根据“执行到哪一步”排查
 
-- 后台 JWT 和 Redis Session 认证；
-- `prize:image:upload` 权限校验；
-- 5 MiB 业务限制；
-- JPEG、PNG、WebP 白名单；
-- Magic Bytes 检测；
-- 声明类型与真实类型一致性检查；
-- 随机 UUID Object Key；
-- AccessKey 不进入 Git；
-- 前端不直接接触 OSS Secret；
-- 对客户端隐藏 OSS SDK 异常细节。
+### 24.1 Controller 都没进入
 
-需要注意：
+可能原因：
 
-1. Bucket 只能配置“公共读”，绝不能配置“公共读写”。
-2. RAM 用户应遵循最小权限原则。
-3. 公共图片可能被盗链并产生流量费用，可配置防盗链或 CDN。
-4. 当前没有病毒扫描或图片解码级安全验证。
-5. 当前把整个文件读入内存，但因为限制为 5 MiB，风险可控。
-6. 当前不自动删除旧图和孤立图。
-7. 当前数据库只保存公开 URL，没有保存 Object Key。
-8. 当前没有真实 OSS 自动化集成测试。
+- URL 写错；
+- 不是 POST；
+- 请求不是 `multipart/form-data`；
+- form-data Key 不是 `file`；
+- 文件超过 Spring 的 6MB 外层限制；
+- Token 无效；
+- 没有权限。
+
+### 24.2 返回 41002
+
+```text
+图片为空
+```
+
+检查 Postman 中 `file` 的 Type 是否选为 `File`，是否确实选择了文件。
+
+### 24.3 返回 41003
+
+```text
+图片类型不支持或声明类型与真实类型不一致
+```
+
+重点不要只看后缀。检查真实文件头和请求 MIME。
+
+### 24.4 返回 41004
+
+```text
+图片超过 5MiB
+```
+
+压缩或缩小图片后再上传。
+
+### 24.5 返回 51002
+
+```text
+OSS 配置不可用
+```
+
+检查：
+
+```text
+OSS_ENABLED
+OSS_REGION
+OSS_ENDPOINT
+OSS_BUCKET
+OSS_ACCESS_KEY_ID
+OSS_ACCESS_KEY_SECRET
+OSS_PUBLIC_BASE_URL
+```
+
+修改 `.env` 后要重启应用，因为 OSS Client 是应用启动时创建的。
+
+### 24.6 返回 51001
+
+```text
+LuckyHub 已尝试调用 OSS，但上传失败
+```
+
+重点检查：
+
+- Endpoint 和 Region 是否属于这个 Bucket；
+- Bucket 名称是否正确；
+- AccessKey 是否有效；
+- RAM 用户是否有 `oss:PutObject` 权限；
+- 网络能否访问 OSS；
+- 系统时间是否明显错误。
+
+### 24.7 上传成功，但 URL 不能打开
+
+这说明“写入 OSS”成功，但“公开读取”没有配置好。
+
+检查：
+
+- `OSS_PUBLIC_BASE_URL` 是否正确；
+- Bucket 或对象是否允许公开读取；
+- 自定义域名/CDN 是否已经绑定并生效；
+- URL 中的 Object Key 是否完整。
 
 ---
 
-## 26. 可以继续改进的方向
+# 第十五段：最后真正理解这套设计
 
-### 26.1 兼容 `application/octet-stream`
+## 25. 每个类只回答一个问题
 
-一些 PowerShell、Swagger 或前端组件会把合法图片声明为：
+| 类或配置 | 它回答的问题 |
+|---|---|
+| `PrizeImageController` | 哪个 HTTP 请求进入哪个 Java 方法？ |
+| `MultipartFile` | Spring 怎样表示收到的上传文件？ |
+| `PrizeImageValidator` | 这个文件是否真的可接受？ |
+| `ValidatedImage` | 怎样携带已经验证过的字节、类型和扩展名？ |
+| `PrizeImageService` | 上传业务步骤按什么顺序执行？ |
+| `ObjectStorageGateway` | 业务层需要怎样的对象存储能力？ |
+| `AliyunOssObjectStorageGateway` | 怎样把通用上传转换成阿里云 PutObject？ |
+| `UnavailableObjectStorageGateway` | 配置缺失时怎样返回明确错误？ |
+| `OssProperties` | Java 怎样拿到集中管理的 OSS 配置？ |
+| `OssConfiguration` | 启动时怎样创建 OSS Client 和 Gateway？ |
+| `ImageUploadView` | 上传成功要返回哪些字段？ |
+| `PrizeServiceImpl` | 怎样把公开 URL 保存进奖品数据？ |
 
-```text
-application/octet-stream
-```
-
-当前严格要求声明类型与真实类型完全一致，因此会返回 `41003`。
-
-可以考虑：
-
-```text
-如果声明类型是 application/octet-stream
-    仍然以 Magic Bytes 识别结果为准
-否则
-    要求声明类型与真实类型一致
-```
-
-安全的关键仍然是不能只相信客户端声明。
-
-### 26.2 保存 Object Key
-
-给 `marketing_prize` 增加：
-
-```sql
-image_object_key VARCHAR(500)
-```
-
-便于：
-
-- 更新图片后删除旧对象；
-- 审计；
-- 批量迁移；
-- 切换公开域名而不修改所有数据库 URL。
-
-### 26.3 私有 Bucket
-
-如果奖品图片不是完全公开内容，可以改成：
+最核心的原理不是记住类名，而是学会这样思考：
 
 ```text
-私有 Bucket
-    ↓
-后端生成有时效的签名 URL
+请求来到这里以后，现在缺少什么能力？
+        ↓
+这个能力应该由谁负责？
+        ↓
+它需要什么输入？
+        ↓
+它应该产生什么输出？
+        ↓
+输出交给执行链的下一步
 ```
 
-这时数据库更适合保存 Object Key，而不是长期公开 URL。
+本项目的答案最终形成：
 
-### 26.4 STS 前端直传
+```text
+Controller 负责 HTTP
+Validator 负责信任边界
+Service 负责流程
+Gateway 负责隔离外部存储
+Configuration 负责组装对象
+VO 负责表达输出
+Prize Service 负责持久化 URL
+```
 
-高并发、大文件场景可以让后端签发短期 STS 凭证，浏览器直接上传 OSS。
-
-优点：
-
-- 文件流量不经过应用服务器；
-- 降低服务器带宽和内存压力。
-
-代价：
-
-- 权限策略和前端逻辑更复杂；
-- 必须限制 STS 有效期、路径和操作；
-- 需要防止客户端绕过业务约束。
-
-当前奖品图片最大只有 5 MiB，后端代理上传更简单，也足够使用。
+当你下次实现“用户头像上传”“活动封面上传”或“商品图片上传”时，可以直接套用同一套思考方式，而不是复制粘贴阿里云代码。
 
 ---
 
-## 27. 总结
+## 26. 用三句话复述整个原理
 
-LuckyHub 的 OSS 图片上传不是一个单独的 SDK 调用，而是一条完整的受控业务链：
+第一句：
 
 ```text
-JWT/Session 认证
-    ↓
-RBAC 权限校验
-    ↓
-MultipartFile 接收
-    ↓
-大小限制
-    ↓
-Content-Type 白名单
-    ↓
-Magic Bytes 识别
-    ↓
-生成日期 + UUID Object Key
-    ↓
-ObjectStorageGateway 抽象
-    ↓
-阿里云 PutObject
-    ↓
-拼接公开 URL
-    ↓
-前端把 URL 放入创建/修改奖品请求
-    ↓
-MyBatis-Plus 写入 marketing_prize.image_url
+Spring 把 multipart 请求中的 file 转成 MultipartFile，
+Controller 再把它交给 Service。
 ```
 
-理解这条链路后，可以把同样的思路应用到：
+第二句：
 
-- 用户头像；
-- 活动封面；
-- 商品图片；
-- 优惠券背景；
-- 中奖凭证；
-- 后台富文本附件。
+```text
+Service 先通过 Validator 得到可信的 ValidatedImage，
+再生成唯一 Object Key，通过 Gateway 调用 OSS。
+```
 
-其中最值得复用的设计不是某一行 OSS SDK 代码，而是：
+第三句：
 
-1. 配置与密钥外置；
-2. 业务层依赖存储抽象；
-3. 不相信文件扩展名；
-4. 上传与业务数据保存分离；
-5. 返回稳定 URL，同时保留 Object Key；
-6. 权限、错误码和自动化测试共同约束功能。
+```text
+上传成功后用公开基础域名和 Object Key 拼出 URL，
+前端再把这个 URL 放进创建或修改奖品的 JSON，最终保存到数据库。
+```
+
+如果你能够不看文档，用自己的话解释这三句，并能画出下面这条链路，就已经真正理解了本次实现：
+
+```text
+POST multipart
+→ MultipartFile
+→ Controller
+→ Service
+→ Validator
+→ ValidatedImage
+→ Object Key
+→ Gateway
+→ OSS SDK
+→ OSS
+→ public URL
+→ ImageUploadView
+→ 创建奖品 JSON
+→ image_url
+```
