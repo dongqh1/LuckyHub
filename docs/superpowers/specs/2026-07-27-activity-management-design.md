@@ -11,7 +11,7 @@
 - 管理活动奖品的权重、总库存、剩余库存和展示顺序；
 - 通过 RBAC 权限保护所有后台接口；
 - 使用 MySQL 事务保存管理数据；
-- 根据当前时间动态计算活动运行阶段；
+- 通过 Spring 定时任务把活动运行状态持久化到 MySQL；
 - 编写按 HTTP 请求执行顺序展开的教学文档。
 
 本阶段不实现：
@@ -22,74 +22,77 @@
 - 每日抽奖次数统计；
 - 抽奖订单和中奖记录；
 - 用户权益发放；
-- 定时任务修改活动状态；
 - 活动物理删除。
 
 ## 2. 核心设计决策
 
-### 2.1 管理状态与运行阶段分离
+### 2.1 数据库持久化完整活动状态
 
-`marketing_activity.status` 只保存管理状态：
+`marketing_activity.status` 保存活动当前的完整状态：
 
 - `DRAFT`：草稿；
-- `PUBLISHED`：已发布；
+- `SCHEDULED`：已发布，等待开始；
+- `RUNNING`：正在进行；
+- `ENDED`：已经到达结束时间；
 - `DISABLED`：管理员手动禁用。
 
-接口另外返回动态计算的 `phase`：
-
-- `DRAFT`；
-- `SCHEDULED`；
-- `RUNNING`；
-- `ENDED`；
-- `DISABLED`。
-
-运行阶段计算规则：
+“发布”是一个管理操作，不单独保存为 `PUBLISHED`。发布时：
 
 ```text
-status = DRAFT
-    → phase = DRAFT
+当前时间 < startTime
+    → status = SCHEDULED
 
-status = DISABLED
-    → phase = DISABLED
-
-status = PUBLISHED 且 now < startTime
-    → phase = SCHEDULED
-
-status = PUBLISHED 且 startTime <= now < endTime
-    → phase = RUNNING
-
-status = PUBLISHED 且 now >= endTime
-    → phase = ENDED
+startTime <= 当前时间 < endTime
+    → status = RUNNING
 ```
 
-到达结束时间后，数据库不会自动执行 `UPDATE`，也不会把 `status` 改成 `ENDED`。每次查询时由 Java 使用 `Clock` 和 `endTime` 计算 `phase`。这样不需要定时任务，也不会因为应用停机而错过状态更新。
+Spring 定时任务默认每 30 秒执行一次，使用 MySQL `NOW(3)` 批量更新：
+
+```sql
+UPDATE marketing_activity
+SET status = 'RUNNING'
+WHERE status = 'SCHEDULED'
+  AND start_time <= NOW(3)
+  AND end_time > NOW(3);
+
+UPDATE marketing_activity
+SET status = 'ENDED'
+WHERE status IN ('SCHEDULED', 'RUNNING')
+  AND end_time <= NOW(3);
+```
+
+第二条 SQL 同时匹配 `SCHEDULED`，用于修复应用停机期间错过开始和结束时间的活动。应用重启后第一次调度即可把它直接修正为 `ENDED`。
+
+查询接口只读取数据库，不在 `GET` 请求中执行状态更新。
 
 ### 2.2 状态流转
 
 ```text
 创建
   ↓
-DRAFT ─────────发布────────→ PUBLISHED
-  │                            │
-  │                            ├─ SCHEDULED
-  │                            ├─ RUNNING
-  │                            └─ ENDED
-  │                            │
-  └────────────禁用────────────┴──→ DISABLED
-                                      │
-                                      └─恢复编辑→ DRAFT
+DRAFT ──发布──┬──→ SCHEDULED ──到达开始时间──→ RUNNING
+  │           │                                   │
+  │           └──→ RUNNING                        │
+  │                                               │
+  │                         到达结束时间───────────┘
+  │                                   ↓
+  │                                 ENDED
+  │
+  └───────────────管理员禁用────────────────────→ DISABLED
+                                                   │
+                                                   └─恢复编辑→ DRAFT
 ```
 
 规则：
 
 - 创建活动后固定为 `DRAFT`；
 - `DRAFT` 可以发布；
-- `DRAFT` 和 `PUBLISHED` 都可以禁用；
+- `DRAFT`、`SCHEDULED`、`RUNNING` 和 `ENDED` 都可以禁用；
 - `DISABLED` 只能查询或恢复；
 - 恢复把 `DISABLED` 转换为 `DRAFT`；
 - 恢复后可以修改时间和奖品，再重新发布；
-- `PUBLISHED` 的 `SCHEDULED` 和 `RUNNING` 阶段允许具有权限的管理员修改；
-- `PUBLISHED` 的 `ENDED` 阶段不能直接修改，必须先禁用、恢复为草稿，再修改和发布；
+- `SCHEDULED` 和 `RUNNING` 允许具有权限的管理员修改；
+- `ENDED` 不能直接修改，必须先禁用、恢复为草稿，再修改和发布；
 - 重复禁用 `DISABLED` 活动保持成功；
 - 重复恢复非 `DISABLED` 活动返回非法状态错误；
 - 只有 `DRAFT` 可以发布。
@@ -98,7 +101,15 @@ DRAFT ─────────发布────────→ PUBLISHED
 
 活动后台管理是低频、强一致性的管理操作，本阶段只使用 MySQL。
 
-后续抽奖模块可以在活动发布、修改、禁用和恢复后维护 Redis 缓存，但本设计不提前引入缓存双写和一致性问题。
+后续抽奖模块可以在活动发布、修改、定时变更、禁用和恢复后维护 Redis 缓存，但本设计不提前引入缓存双写和一致性问题。
+
+### 2.4 定时任务的一致性边界
+
+- 默认间隔为 30 秒，可通过 `luckyhub.activity.status-refresh-interval` 配置；
+- 状态变化最多延迟一个调度周期；
+- SQL 使用数据库 `NOW(3)`，避免多个应用实例系统时间不一致；
+- 条件更新具有幂等性，多实例重复执行不会重复改变已经更新的记录；
+- 后续抽奖接口不能只检查 `status = RUNNING`，还必须同时检查 `start_time <= NOW(3)` 和 `end_time > NOW(3)`，防止调度延迟造成越界抽奖。
 
 ## 3. 数据模型
 
@@ -111,7 +122,7 @@ DRAFT ─────────发布────────→ PUBLISHED
 | `id` | 活动 ID |
 | `activity_name` | 活动名称 |
 | `description` | 活动说明 |
-| `status` | `DRAFT`、`PUBLISHED` 或 `DISABLED` |
+| `status` | `DRAFT`、`SCHEDULED`、`RUNNING`、`ENDED` 或 `DISABLED` |
 | `start_time` | 开始时间 |
 | `end_time` | 结束时间 |
 | `daily_limit` | 用户每日参与次数上限 |
@@ -143,16 +154,6 @@ DRAFT ─────────发布────────→ PUBLISHED
 
 ```java
 public enum ActivityStatus {
-    DRAFT,
-    PUBLISHED,
-    DISABLED
-}
-```
-
-### 4.2 `ActivityPhase`
-
-```java
-public enum ActivityPhase {
     DRAFT,
     SCHEDULED,
     RUNNING,
@@ -217,7 +218,7 @@ GET /api/admin/activities/{id}
 activity:read
 ```
 
-返回活动基础信息、数据库 `status` 和动态 `phase`。
+返回活动基础信息和数据库中持久化的 `status`。
 
 活动不存在返回 HTTP 404。
 
@@ -236,12 +237,9 @@ activity:read
 查询参数：
 
 - `name`：按活动名称模糊查询；
-- `status`：按数据库管理状态筛选；
-- `phase`：可选，按动态运行阶段筛选；
+- `status`：按活动状态精确筛选；
 - `page`：从 1 开始；
 - `size`：1 至 100。
-
-`phase` 是动态值。为保持第一版实现准确、简单，按 `phase` 查询时把它转换为对应的状态和时间条件，不在数据库保存冗余阶段。
 
 排序：
 
@@ -266,15 +264,15 @@ activity:update
 允许：
 
 - `DRAFT`；
-- `PUBLISHED + SCHEDULED`；
-- `PUBLISHED + RUNNING`。
+- `SCHEDULED`；
+- `RUNNING`。
 
 拒绝：
 
 - `DISABLED`；
-- `PUBLISHED + ENDED`。
+- `ENDED`。
 
-修改后不改变数据库管理状态。
+修改 `DRAFT` 不改变状态。修改 `SCHEDULED` 或 `RUNNING` 时，新的 `endTime` 必须晚于数据库当前时间，然后根据新的 `startTime` 立即重新计算为 `SCHEDULED` 或 `RUNNING`。
 
 ### 5.5 发布活动
 
@@ -299,13 +297,15 @@ activity:publish
 - 所有库存满足 `0 <= remainingStock <= totalStock`；
 - 至少一个奖品的 `remainingStock > 0`。
 
-发布成功后：
+发布成功后，根据数据库当前时间设置：
 
 ```text
-status = PUBLISHED
-```
+now < startTime
+    → status = SCHEDULED
 
-具体 `phase` 由当前时间决定。
+startTime <= now < endTime
+    → status = RUNNING
+```
 
 ### 5.6 禁用活动
 
@@ -319,7 +319,7 @@ PATCH /api/admin/activities/{id}/disable
 activity:disable
 ```
 
-允许从 `DRAFT` 或 `PUBLISHED` 禁用。重复禁用保持成功。
+允许从 `DRAFT`、`SCHEDULED`、`RUNNING` 或 `ENDED` 禁用。重复禁用保持成功。
 
 禁用后：
 
@@ -347,7 +347,6 @@ activity:restore
 
 ```text
 status = DRAFT
-phase = DRAFT
 ```
 
 恢复不会自动修改原开始时间、结束时间或奖品配置。管理员需要检查和修改后重新发布。
@@ -493,7 +492,6 @@ activity/
 │  └─ MarketingActivityPrize
 ├─ enums/
 │  ├─ ActivityStatus
-│  ├─ ActivityPhase
 │  └─ ActivityErrorCode
 ├─ mapper/
 │  ├─ MarketingActivityMapper
@@ -501,11 +499,13 @@ activity/
 ├─ service/
 │  ├─ ActivityService
 │  ├─ ActivityPrizeService
+│  ├─ ActivityStatusService
 │  └─ impl/
 │     ├─ ActivityServiceImpl
-│     └─ ActivityPrizeServiceImpl
-├─ support/
-│  └─ ActivityPhaseResolver
+│     ├─ ActivityPrizeServiceImpl
+│     └─ ActivityStatusServiceImpl
+├─ scheduler/
+│  └─ ActivityStatusScheduler
 └─ vo/
    ├─ ActivityView
    └─ ActivityPrizeView
@@ -516,7 +516,8 @@ activity/
 - Controller：HTTP 路由、请求绑定、权限和响应状态；
 - DTO：客户端输入和 Jakarta Validation；
 - Service：事务、状态流转和业务规则；
-- PhaseResolver：只负责通过状态和时间计算运行阶段；
+- StatusService：使用两条条件更新 SQL 批量推进时间状态；
+- StatusScheduler：每 30 秒触发一次状态修正；
 - Mapper：MyBatis-Plus 数据访问；
 - Entity：数据库行映射；
 - VO：稳定的接口输出。
@@ -537,6 +538,8 @@ activity/
 查询接口不启动写事务。
 
 发布操作必须在同一个事务中读取活动和关联奖品、完成所有校验并更新状态。
+
+定时任务中的 `SCHEDULED → RUNNING` 和 `SCHEDULED/RUNNING → ENDED` 分别使用单条批量 `UPDATE`。每条 SQL 自己构成原子操作，不逐行加载 Entity。
 
 ## 9. 权限
 
@@ -574,19 +577,15 @@ DTO 格式错误继续由全局参数校验处理。
 
 ## 11. 测试
 
-### 11.1 `ActivityPhaseResolverTests`
+### 11.1 `ActivityStatusServiceTests`
 
-使用固定 `Clock` 验证：
+验证：
 
-- 草稿；
-- 禁用；
-- 开始前；
-- 开始时刻；
-- 进行中；
-- 结束时刻；
-- 结束后。
-
-重点证明 `ENDED` 是查询时计算的，不需要数据库更新。
+- 到达开始时间的 `SCHEDULED` 批量变为 `RUNNING`；
+- 到达结束时间的 `SCHEDULED` 和 `RUNNING` 批量变为 `ENDED`；
+- `DRAFT`、`ENDED` 和 `DISABLED` 不被错误修改；
+- 重复执行状态刷新结果不变；
+- `ActivityStatusScheduler` 会调用状态服务。
 
 ### 11.2 `ActivityServiceTests`
 
@@ -597,7 +596,8 @@ DTO 格式错误继续由全局参数校验处理。
 - 查询和分页；
 - 草稿、待开始和进行中允许修改；
 - 已结束和禁用活动拒绝修改；
-- 发布前全部校验；
+- 发布前全部校验，并根据当前时间持久化为 `SCHEDULED` 或 `RUNNING`；
+- 修改已发布活动时间后重新计算并持久化状态；
 - 禁用幂等；
 - 只有禁用活动可以恢复；
 - 恢复后回到草稿。
@@ -674,7 +674,6 @@ HTTP JSON
 → MarketingActivityMapper
 → MyBatis-Plus
 → MySQL
-→ ActivityPhaseResolver
 → ActivityView
 → ApiResponse
 → JSON
@@ -685,7 +684,9 @@ HTTP JSON
 - 添加活动奖品；
 - 修改活动奖品库存；
 - 发布活动；
-- 查询时动态计算 `SCHEDULED`、`RUNNING` 和 `ENDED`；
+- Spring 定时任务如何使用批量 SQL 把 `SCHEDULED` 更新为 `RUNNING`、把到期活动更新为 `ENDED`；
+- 为什么查询接口不执行 `UPDATE`；
+- 应用停机后重新启动时怎样修复过期状态；
 - 禁用活动；
 - 恢复为草稿；
 - 修改配置并重新发布。
