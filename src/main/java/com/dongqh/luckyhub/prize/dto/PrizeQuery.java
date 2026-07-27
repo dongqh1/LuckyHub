@@ -15,6 +15,9 @@ public class PrizeQuery {
 
     private String name;
     private PrizeType type;
+
+    @Min(value = 0, message = "奖品状态只能是0或1")
+    @Max(value = 1, message = "奖品状态只能是0或1")
     private Integer status;
 
     public long getPage() {

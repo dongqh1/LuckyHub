@@ -20,6 +20,10 @@ spring:
       password: ${REDIS_PASSWORD}
       database: 0
       timeout: 3s
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 6MB
 
 mybatis-plus:
   configuration:
@@ -32,6 +36,14 @@ springdoc:
     path: /swagger-ui.html
 
 luckyhub:
+  oss:
+    enabled: ${OSS_ENABLED:false}
+    region: ${OSS_REGION:}
+    endpoint: ${OSS_ENDPOINT:}
+    bucket: ${OSS_BUCKET:}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
   security:
     password:
       bcrypt-strength: ${BCRYPT_STRENGTH:12}

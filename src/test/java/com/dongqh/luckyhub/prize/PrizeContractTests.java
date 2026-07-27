@@ -39,9 +39,10 @@ class PrizeContractTests {
 
         defaults.setPage(0);
         defaults.setSize(101);
+        defaults.setStatus(2);
         assertThat(validator.validate(defaults))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .containsExactlyInAnyOrder("page", "size");
+                .containsExactlyInAnyOrder("page", "size", "status");
     }
 
     @Test
