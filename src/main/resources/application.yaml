@@ -36,6 +36,9 @@ springdoc:
     path: /swagger-ui.html
 
 luckyhub:
+  activity:
+    status-refresh-interval: ${ACTIVITY_STATUS_REFRESH_INTERVAL:30000}
+    status-refresh-initial-delay: ${ACTIVITY_STATUS_REFRESH_INITIAL_DELAY:0}
   oss:
     enabled: ${OSS_ENABLED:false}
     region: ${OSS_REGION:}
