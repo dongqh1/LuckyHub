@@ -36,3 +36,6 @@ OSS 图片上传的完整调用链、源码解析和排错案例见
 
 从创建活动请求开始的完整执行流程和源码教学见
 [`docs/LuckyHub-活动管理实现详解.md`](docs/LuckyHub-活动管理实现详解.md)。
+
+活动状态定时任务从应用启动、Spring 调度、事务到 MySQL 批量更新的详细执行流程见
+[`docs/LuckyHub-活动状态定时任务实现详解.md`](docs/LuckyHub-活动状态定时任务实现详解.md)。
