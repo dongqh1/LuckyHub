@@ -30,3 +30,9 @@ Swagger UI 地址为 `http://localhost:8080/swagger-ui.html`。
 
 OSS 图片上传的完整调用链、源码解析和排错案例见
 [`docs/LuckyHub-OSS图片上传实现详解.md`](docs/LuckyHub-OSS图片上传实现详解.md)。
+
+活动管理接口、状态流转和权限说明见
+[`docs/activity-management-api.md`](docs/activity-management-api.md)。
+
+从创建活动请求开始的完整执行流程和源码教学见
+[`docs/LuckyHub-活动管理实现详解.md`](docs/LuckyHub-活动管理实现详解.md)。
