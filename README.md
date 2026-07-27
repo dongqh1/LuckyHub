@@ -27,3 +27,6 @@ Swagger UI 地址为 `http://localhost:8080/swagger-ui.html`。
 
 奖品管理和阿里云 OSS 的配置、权限及调用示例见
 [`docs/prize-management-api.md`](docs/prize-management-api.md)。
+
+OSS 图片上传的完整调用链、源码解析和排错案例见
+[`docs/LuckyHub-OSS图片上传实现详解.md`](docs/LuckyHub-OSS图片上传实现详解.md)。

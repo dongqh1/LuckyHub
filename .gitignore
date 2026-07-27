@@ -1,3 +1,4 @@
 .env
+docs/AccessKey*.csv
 target/
 .idea/
