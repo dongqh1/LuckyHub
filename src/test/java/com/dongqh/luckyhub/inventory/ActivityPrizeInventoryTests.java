@@ -12,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,7 +51,7 @@ class ActivityPrizeInventoryTests {
     @Test
     void oneHundredConcurrentAttemptsCanConsumeStockTenTimesOnly() {
         MarketingActivityPrize relation = new MarketingActivityPrize();
-        long uniqueValue = System.nanoTime();
+        long uniqueValue = positiveRandomLong();
         relation.setActivityId(uniqueValue);
         relation.setPrizeId(uniqueValue);
         relation.setWeight(1);
@@ -107,6 +108,11 @@ class ActivityPrizeInventoryTests {
                 Integer.class,
                 activityPrizeId
         );
+    }
+
+    private long positiveRandomLong() {
+        long value = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
+        return value == 0 ? 1 : value;
     }
 
     private record Attempt(boolean decremented, int observedStock) {

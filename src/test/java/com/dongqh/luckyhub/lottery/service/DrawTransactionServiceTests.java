@@ -164,7 +164,7 @@ class DrawTransactionServiceTests {
     private Fixture fixture(int drawCount, int stock) {
         String requestId = "task9-tx-" + UUID.randomUUID();
         requestIds.add(requestId);
-        long unique = Math.abs(System.nanoTime());
+        long unique = positiveRandomLong();
         long activityId = unique;
         long prizeId = unique + 1;
 
@@ -207,6 +207,11 @@ class DrawTransactionServiceTests {
 
     private Long nullableLong(Object value) {
         return value == null ? null : ((Number) value).longValue();
+    }
+
+    private long positiveRandomLong() {
+        long value = UUID.randomUUID().getMostSignificantBits() & Long.MAX_VALUE;
+        return value == 0 ? 1 : value;
     }
 
     private String orderStatus(long orderId) {
