@@ -94,7 +94,7 @@ MySQL是最终事实来源，保存活动配置、库存、订单、结果快照
 
 ### 3.2 Redis
 
-Redis保存每日额度、预占状态、用户活动锁、请求短期状态、结果缓存和当前Redis Stream消息。Redis不是最终抽奖记录来源，异常状态由MySQL和对账任务修复。
+第一版Redis只保存每日额度、预占状态、预占超时索引、用户活动锁和当前Redis Stream消息。幂等短路和结果读取直接查询MySQL订单与记录，MySQL仍是最终事实来源；异常状态由MySQL和对账任务修复。请求短期状态和结果缓存可以在未来作为性能优化增加，但不能成为正确性或结果查询的依赖。
 
 ### 3.3 消息抽象
 
@@ -266,14 +266,14 @@ WHERE id = ?
 draw:quota:{activityId}:{userId}:{yyyyMMdd}
 draw:reservation:{requestId}
 draw:reservation:timeouts
-draw:request:{requestId}
-draw:result:{requestId}
 lock:draw:{activityId}:{userId}
 ```
 
 Key由集中工厂生成。额度和预占至少保留到抽奖日期次日零点后48小时。
 
 `draw:reservation:timeouts`使用Sorted Set，member为 `requestId`，score为预占超时时刻。预占Lua同时写入该索引，确认或释放Lua同时移除；对账任务按score批量读取超时请求，不能通过 `KEYS`扫描Redis。
+
+未来如果查询压力需要，可选择增加 `draw:request:{requestId}` 和 `draw:result:{requestId}` 缓存。第一版当前未实现这两个Key；即使将来增加，缓存未命中或丢失时仍必须回源MySQL，不能用缓存替代幂等唯一约束、订单状态或历史结果。
 
 ### 6.2 额度预占Lua
 
