@@ -12,7 +12,10 @@ import org.springframework.context.annotation.Configuration;
 @MapperScan(basePackages = {
         "com.dongqh.luckyhub.rbac.mapper",
         "com.dongqh.luckyhub.prize.mapper",
-        "com.dongqh.luckyhub.activity.mapper"
+        "com.dongqh.luckyhub.activity.mapper",
+        "com.dongqh.luckyhub.lottery.mapper",
+        "com.dongqh.luckyhub.inventory.mapper",
+        "com.dongqh.luckyhub.benefit.mapper"
 })
 public class MybatisPlusConfig {
 
