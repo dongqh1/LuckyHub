@@ -11,4 +11,7 @@ public interface DrawQuotaService {
     void confirm(String requestId);
 
     void release(String requestId);
+
+    /** Removes only the timeout-index member; it never changes reservation state or quota. */
+    void removeTimeout(String requestId);
 }

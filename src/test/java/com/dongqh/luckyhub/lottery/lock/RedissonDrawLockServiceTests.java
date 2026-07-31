@@ -26,7 +26,8 @@ class RedissonDrawLockServiceTests {
     private final RLock lock = mock(RLock.class);
     private final LotteryProperties properties = new LotteryProperties(
             ZoneId.of("Asia/Shanghai"), Duration.ofMillis(275), Duration.ofMinutes(2),
-            Duration.ofSeconds(30), Duration.ofHours(72), Duration.ofSeconds(5), 100
+            Duration.ofSeconds(30), Duration.ofSeconds(60), 100,
+            Duration.ofHours(72), Duration.ofSeconds(5), 100
     );
     private final RedissonDrawLockService service = new RedissonDrawLockService(redissonClient, properties);
 

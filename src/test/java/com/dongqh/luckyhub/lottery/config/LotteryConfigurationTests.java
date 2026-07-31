@@ -30,6 +30,8 @@ class LotteryConfigurationTests {
         assertThat(properties.lockWait()).isEqualTo(Duration.ofSeconds(3));
         assertThat(properties.processingTimeout()).isEqualTo(Duration.ofMinutes(2));
         assertThat(properties.reconcileInterval()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(properties.reconcileInitialDelay()).isEqualTo(Duration.ofSeconds(60));
+        assertThat(properties.reconcileBatchSize()).isEqualTo(100);
         assertThat(properties.reservationRetention()).isEqualTo(Duration.ofHours(72));
         assertThat(properties.outboxInterval()).isEqualTo(Duration.ofSeconds(5));
         assertThat(properties.outboxBatchSize()).isEqualTo(100);
@@ -64,7 +66,25 @@ class LotteryConfigurationTests {
                 "consumer", 20, Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(30)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new LotteryProperties(ZoneId.of("Asia/Shanghai"), Duration.ofSeconds(1),
-                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofHours(72),
-                Duration.ofSeconds(5), 0)).isInstanceOf(IllegalArgumentException.class);
+                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofSeconds(1), 100,
+                Duration.ofHours(72), Duration.ofSeconds(5), 0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> propertiesWithReconciliation(Duration.ZERO, Duration.ZERO, 100))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> propertiesWithReconciliation(Duration.ofSeconds(1),
+                Duration.ofSeconds(-1), 100)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> propertiesWithReconciliation(Duration.ofSeconds(1),
+                Duration.ZERO, 0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LotteryProperties(ZoneId.of("Asia/Shanghai"), Duration.ofSeconds(1),
+                Duration.ZERO, Duration.ofSeconds(30), Duration.ZERO, 100,
+                Duration.ofHours(72), Duration.ofSeconds(5), 100))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private LotteryProperties propertiesWithReconciliation(
+            Duration interval, Duration initialDelay, int batchSize) {
+        return new LotteryProperties(ZoneId.of("Asia/Shanghai"), Duration.ofSeconds(1),
+                Duration.ofMinutes(2), interval, initialDelay, batchSize,
+                Duration.ofHours(72), Duration.ofSeconds(5), 100);
     }
 }

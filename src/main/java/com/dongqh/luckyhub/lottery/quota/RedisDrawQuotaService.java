@@ -135,6 +135,16 @@ public class RedisDrawQuotaService implements DrawQuotaService {
         }
     }
 
+    @Override
+    public void removeTimeout(String requestId) {
+        requireRequestId(requestId);
+        try {
+            redisTemplate.opsForZSet().remove(DrawQuotaKeys.reservationTimeouts(), requestId);
+        } catch (RuntimeException error) {
+            throw new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
+        }
+    }
+
     private QuotaReservationResult mapReservationResponse(
             QuotaReservationRequest request,
             LocalDate drawDate,
