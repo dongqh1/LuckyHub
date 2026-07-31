@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -71,6 +72,37 @@ class OutboxServiceTests {
         assertThat(json).contains("\"eventType\":\"DRAW_CONFIRMED\"")
                 .contains("\"eventVersion\":1")
                 .contains("\"requestId\":\"request-1001\"");
+    }
+
+    @Test
+    void roundTripsEveryBusinessPayloadType() throws Exception {
+        DrawConfirmedEvent confirmed = new DrawConfirmedEvent(10, LocalDate.of(2026, 7, 31));
+        DrawReleaseRequestedEvent release = new DrawReleaseRequestedEvent(
+                1, LocalDate.of(2026, 7, 31), "DRAW_TRANSACTION_FAILED");
+        PrizeFulfillmentRequestedEvent fulfillment = new PrizeFulfillmentRequestedEvent(
+                51L, 52L, 53L, PrizeType.COUPON);
+
+        assertPayloadRoundTrip(DrawEventType.DRAW_CONFIRMED, confirmed, DrawConfirmedEvent.class);
+        assertPayloadRoundTrip(
+                DrawEventType.DRAW_RELEASE_REQUESTED, release, DrawReleaseRequestedEvent.class);
+        assertPayloadRoundTrip(
+                DrawEventType.PRIZE_FULFILLMENT_REQUESTED,
+                fulfillment,
+                PrizeFulfillmentRequestedEvent.class);
+    }
+
+    @Test
+    void defensivelyCopiesPayloadWhenConstructedAndWhenRead() {
+        ObjectNode source = objectMapper.createObjectNode().put("drawCount", 1);
+        DrawEventEnvelope envelope = new DrawEventEnvelope(
+                UUID.randomUUID(), DrawEventType.DRAW_CONFIRMED, 1, "copy-request",
+                21L, 31L, 41L, LocalDateTime.of(2026, 7, 31, 12, 30), source);
+
+        source.put("drawCount", 10);
+        ObjectNode returned = (ObjectNode) envelope.payload();
+        returned.put("drawCount", 10);
+
+        assertThat(envelope.payload().get("drawCount").asInt()).isOne();
     }
 
     @Test
@@ -146,6 +178,25 @@ class OutboxServiceTests {
                 LocalDateTime.of(2026, 7, 31, 12, 30),
                 new DrawConfirmedEvent(1, LocalDate.of(2026, 7, 31)),
                 objectMapper);
+    }
+
+    private <T> void assertPayloadRoundTrip(
+            DrawEventType eventType,
+            T payload,
+            Class<T> payloadType) throws Exception {
+        DrawEventEnvelope original = DrawEventEnvelope.create(
+                eventType,
+                "payload-" + eventType,
+                21L,
+                31L,
+                41L,
+                LocalDateTime.of(2026, 7, 31, 12, 30),
+                payload,
+                objectMapper);
+        DrawEventEnvelope restored = objectMapper.readValue(
+                objectMapper.writeValueAsString(original), DrawEventEnvelope.class);
+
+        assertThat(restored.payloadAs(payloadType, objectMapper)).isEqualTo(payload);
     }
 
     private static void assertBrokerNeutralFields(Class<?> type) {
