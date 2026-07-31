@@ -182,6 +182,37 @@ class LotteryServiceTests {
     }
 
     @Test
+    void releasedReservationWithoutMysqlOrderCannotCreateOrExecuteAgain() {
+        when(quota.reserve(any())).thenReturn(new QuotaReservationResult(
+                requestId, ReservationStatus.RELEASED, drawDate.minusDays(1), 1, true));
+
+        assertError(() -> service.draw(command), LotteryErrorCode.DRAW_ORDER_FAILED);
+
+        verify(lifecycle, never()).createProcessing(any());
+        verifyNoInteractions(transaction);
+    }
+
+    @Test
+    void confirmedReservationWithoutMysqlOrderCannotCreateOrExecuteAgain() {
+        when(quota.reserve(any())).thenReturn(new QuotaReservationResult(
+                requestId, ReservationStatus.CONFIRMED, drawDate, 1, true));
+
+        assertError(() -> service.draw(command), LotteryErrorCode.DRAW_ORDER_FAILED);
+
+        verify(lifecycle, never()).createProcessing(any());
+        verifyNoInteractions(transaction);
+    }
+
+    @Test
+    void compensationLoggingFailureDoesNotReplaceOriginalSafeBusinessError() {
+        when(transaction.execute(any())).thenThrow(new BusinessException(LotteryErrorCode.DRAW_WEIGHT_INVALID));
+        doThrow(new IllegalStateException("outbox down")).when(lifecycle)
+                .markFailedAndRequestRelease(any(), anyString(), any());
+
+        assertError(() -> service.draw(command), LotteryErrorCode.DRAW_WEIGHT_INVALID);
+    }
+
+    @Test
     void getByRequestIdEnforcesJwtOwnership() {
         LotteryDrawOrder other = order(1L, DrawOrderStatus.SUCCESS);
         other.setUserId(999L);

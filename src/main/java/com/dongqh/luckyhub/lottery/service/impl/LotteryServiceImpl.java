@@ -16,6 +16,7 @@ import com.dongqh.luckyhub.lottery.model.NewDrawOrder;
 import com.dongqh.luckyhub.lottery.quota.DrawQuotaService;
 import com.dongqh.luckyhub.lottery.quota.QuotaReservationRequest;
 import com.dongqh.luckyhub.lottery.quota.QuotaReservationResult;
+import com.dongqh.luckyhub.lottery.quota.ReservationStatus;
 import com.dongqh.luckyhub.lottery.service.DrawEligibilityService;
 import com.dongqh.luckyhub.lottery.service.DrawOrderLifecycleService;
 import com.dongqh.luckyhub.lottery.service.DrawTransactionService;
@@ -23,6 +24,8 @@ import com.dongqh.luckyhub.lottery.service.LotteryService;
 import com.dongqh.luckyhub.lottery.vo.DrawOrderView;
 import com.dongqh.luckyhub.lottery.vo.DrawResultView;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +33,7 @@ import java.util.UUID;
 
 @Service
 public class LotteryServiceImpl implements LotteryService {
+    private static final Logger log = LoggerFactory.getLogger(LotteryServiceImpl.class);
     private final LotteryDrawOrderMapper orderMapper;
     private final LotteryDrawRecordMapper recordMapper;
     private final DrawEligibilityService eligibilityService;
@@ -71,6 +75,7 @@ public class LotteryServiceImpl implements LotteryService {
                 QuotaReservationResult reserved = quotaService.reserve(new QuotaReservationRequest(
                         command.requestId(), command.activityId(), userId, command.drawCount(),
                         snapshot.dailyLimit()));
+                requireActiveReservation(reserved);
                 LotteryDrawOrder processing = lifecycleService.createProcessing(new NewDrawOrder(
                         command.requestId(), userId, command.activityId(), command.drawCount(),
                         reserved.drawDate()));
@@ -153,9 +158,22 @@ public class LotteryServiceImpl implements LotteryService {
             try {
                 lifecycleService.markFailedAndRequestRelease(
                         order, "DRAW_TRANSACTION_FAILED", occurredAt);
-            } catch (RuntimeException ignored) {
+            } catch (RuntimeException compensationError) {
                 // The reservation timeout index remains the final reconciliation safety net.
+                log.error("Failed to compensate lottery draw, requestId={}, orderId={}",
+                        order.getRequestId(), order.getId(), compensationError);
             }
+        }
+    }
+
+    private void requireActiveReservation(QuotaReservationResult reservation) {
+        if (reservation == null || reservation.status() == null) {
+            throw new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
+        }
+        // MySQL is the idempotency truth. If no order exists while Redis already says this
+        // request is finalized, the requestId is not reusable: reconciliation must investigate it.
+        if (reservation.status() != ReservationStatus.RESERVED) {
+            throw new BusinessException(LotteryErrorCode.DRAW_ORDER_FAILED);
         }
     }
 

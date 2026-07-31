@@ -6,6 +6,8 @@ import com.dongqh.luckyhub.lottery.dto.DrawCommand;
 import com.dongqh.luckyhub.lottery.enums.DrawOrderStatus;
 import com.dongqh.luckyhub.lottery.enums.DrawResultType;
 import com.dongqh.luckyhub.lottery.quota.DrawQuotaKeys;
+import com.dongqh.luckyhub.lottery.quota.DrawQuotaService;
+import com.dongqh.luckyhub.lottery.quota.QuotaReservationRequest;
 import com.dongqh.luckyhub.lottery.vo.DrawOrderView;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +20,11 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.util.UUID;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class LotteryOrchestrationIntegrationTests {
@@ -27,9 +32,12 @@ class LotteryOrchestrationIntegrationTests {
     @Autowired private LotteryService lotteryService;
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private StringRedisTemplate redisTemplate;
+    @Autowired private DrawQuotaService quotaService;
     private String requestId;
     private Long activityId;
     private DrawOrderView result;
+    private LocalDate retainedQuotaDate;
+    private LocalDate originalQuotaDate;
 
     @AfterEach
     void cleanUpExactRows() {
@@ -44,6 +52,12 @@ class LotteryOrchestrationIntegrationTests {
         }
         if (result != null) {
             redisTemplate.delete(DrawQuotaKeys.quota(activityId, USER_ID, result.drawDate()));
+        }
+        if (retainedQuotaDate != null && activityId != null) {
+            redisTemplate.delete(DrawQuotaKeys.quota(activityId, USER_ID, retainedQuotaDate));
+        }
+        if (originalQuotaDate != null && activityId != null) {
+            redisTemplate.delete(DrawQuotaKeys.quota(activityId, USER_ID, originalQuotaDate));
         }
         if (activityId != null) {
             jdbcTemplate.update("DELETE FROM marketing_activity WHERE id = ?", activityId);
@@ -75,6 +89,34 @@ class LotteryOrchestrationIntegrationTests {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM message_outbox WHERE aggregate_id = ? AND event_type = 'DRAW_CONFIRMED'",
                 Integer.class, Long.toString(result.orderId()))).isOne();
+    }
+
+    @Test
+    void releasedRedisReservationCannotBypassFinalStateAfterMidnightAndPolicyChange() {
+        activityId = insertNoWinActivity();
+        requestId = UUID.randomUUID().toString();
+        retainedQuotaDate = LocalDate.now().minusDays(1);
+        LoginContext.set(new LoginPrincipal(USER_ID, "integration", "session"));
+        originalQuotaDate = quotaService.reserve(
+                new QuotaReservationRequest(requestId, activityId, USER_ID, 10, 10)).drawDate();
+        quotaService.release(requestId);
+        redisTemplate.opsForHash().put(DrawQuotaKeys.reservation(requestId), "drawDate",
+                DateTimeFormatter.BASIC_ISO_DATE.format(retainedQuotaDate));
+        jdbcTemplate.update("UPDATE marketing_activity SET daily_limit = 1 WHERE id = ?", activityId);
+
+        assertThatThrownBy(() -> result = lotteryService.draw(new DrawCommand(requestId, activityId, 10)))
+                .isInstanceOfSatisfying(com.dongqh.luckyhub.common.exception.BusinessException.class,
+                        error -> assertThat(error.getErrorCode())
+                                .isEqualTo(com.dongqh.luckyhub.lottery.enums.LotteryErrorCode.DRAW_ORDER_FAILED));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM lottery_draw_order WHERE request_id = ?", Integer.class, requestId))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM lottery_draw_record WHERE request_id = ?", Integer.class, requestId))
+                .isZero();
+        assertThat(redisTemplate.opsForHash().get(
+                DrawQuotaKeys.reservation(requestId), "status")).isEqualTo("RELEASED");
     }
 
     private long insertNoWinActivity() {
