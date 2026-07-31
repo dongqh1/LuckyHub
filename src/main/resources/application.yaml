@@ -41,6 +41,9 @@ luckyhub:
     lock-wait: 3s
     processing-timeout: 2m
     reconcile-interval: 30s
+    reconcile-initial-delay: 60s
+    reconcile-batch-size: 100
+    reconciliation-enabled: true
     reservation-retention: 72h
     outbox-interval: 5s
     outbox-initial-delay: 60s
