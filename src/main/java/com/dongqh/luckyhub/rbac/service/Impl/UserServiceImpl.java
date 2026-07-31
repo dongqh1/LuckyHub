@@ -65,6 +65,23 @@ public class UserServiceImpl implements UserService {
             throw usernameConflict();
         }
 
+        SysRole userRole = roleMapper.selectOne(
+                Wrappers.<SysRole>lambdaQuery()
+                        .eq(SysRole::getRoleCode, "USER")
+                        .eq(SysRole::getStatus, 1)
+        );
+        if (userRole == null) {
+            throw new BusinessException(
+                    CommonErrorCode.SYSTEM_ERROR,
+                    "系统缺少已启用的USER角色配置"
+            );
+        }
+
+        SysUserRole relation = new SysUserRole();
+        relation.setUserId(user.getId());
+        relation.setRoleId(userRole.getId());
+        userRoleMapper.insert(relation);
+
         return UserView.from(user);
     }
 

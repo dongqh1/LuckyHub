@@ -71,6 +71,33 @@ public final class PermissionCodes {
     public static final String ACTIVITY_PRIZE_MANAGE =
             "activity:prize:manage";
 
+    public static final String LOTTERY_ACTIVITY_READ =
+            "lottery:activity:read";
+
+    public static final String LOTTERY_DRAW =
+            "lottery:draw";
+
+    public static final String LOTTERY_DRAW_READ =
+            "lottery:draw:read";
+
+    public static final String LOTTERY_RECORD_READ =
+            "lottery:record:read";
+
+    public static final String BENEFIT_READ =
+            "benefit:read";
+
+    public static final String LOTTERY_ORDER_READ_ALL =
+            "lottery:order:read:all";
+
+    public static final String LOTTERY_DRAW_READ_ALL =
+            "lottery:draw:read:all";
+
+    public static final String LOTTERY_RECORD_READ_ALL =
+            "lottery:record:read:all";
+
+    public static final String BENEFIT_READ_ALL =
+            "benefit:read:all";
+
     private PermissionCodes() {
     }
 }
