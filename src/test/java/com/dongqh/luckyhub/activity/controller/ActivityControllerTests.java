@@ -60,7 +60,8 @@ class ActivityControllerTests {
                   "description": "会员活动",
                   "startTime": "2026-08-01T10:00:00",
                   "endTime": "2026-08-10T22:00:00",
-                  "dailyLimit": 3
+                  "dailyLimit": 3,
+                  "noWinWeight": 25
                 }
                 """;
 
@@ -69,7 +70,8 @@ class ActivityControllerTests {
                 .andExpect(jsonPath("$.data.id").value(7));
         mockMvc.perform(get("/api/admin/activities/7"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.activityName").value("八月抽奖"));
+                .andExpect(jsonPath("$.data.activityName").value("八月抽奖"))
+                .andExpect(jsonPath("$.data.noWinWeight").value(25));
         mockMvc.perform(get("/api/admin/activities").param("page", "1").param("size", "20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1));
@@ -95,6 +97,35 @@ class ActivityControllerTests {
     }
 
     @Test
+    void rejectsMissingAndNegativeNoWinWeightButAllowsZero() throws Exception {
+        String withoutNoWinWeight = validBody("");
+        String negativeNoWinWeight = validBody(", \"noWinWeight\": -1");
+        String zeroNoWinWeight = validBody(", \"noWinWeight\": 0");
+
+        mockMvc.perform(post("/api/admin/activities")
+                        .contentType(MediaType.APPLICATION_JSON).content(withoutNoWinWeight))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/admin/activities")
+                        .contentType(MediaType.APPLICATION_JSON).content(negativeNoWinWeight))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/admin/activities/7")
+                        .contentType(MediaType.APPLICATION_JSON).content(withoutNoWinWeight))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/admin/activities/7")
+                        .contentType(MediaType.APPLICATION_JSON).content(negativeNoWinWeight))
+                .andExpect(status().isBadRequest());
+
+        when(service.create(any())).thenReturn(view(ActivityStatus.DRAFT));
+        when(service.update(any(Long.class), any())).thenReturn(view(ActivityStatus.DRAFT));
+        mockMvc.perform(post("/api/admin/activities")
+                        .contentType(MediaType.APPLICATION_JSON).content(zeroNoWinWeight))
+                .andExpect(status().isCreated());
+        mockMvc.perform(put("/api/admin/activities/7")
+                        .contentType(MediaType.APPLICATION_JSON).content(zeroNoWinWeight))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void assignsExactPermissions() throws NoSuchMethodException {
         assertPermission("create", PermissionCodes.ACTIVITY_CREATE, CreateActivityCommand.class);
         assertPermission("getById", PermissionCodes.ACTIVITY_READ, long.class);
@@ -116,7 +147,18 @@ class ActivityControllerTests {
                 7L, "八月抽奖", "会员活动", status,
                 LocalDateTime.of(2026, 8, 1, 10, 0),
                 LocalDateTime.of(2026, 8, 10, 22, 0),
-                3, 9L, null, null
+                3, 25, 9L, null, null
         );
+    }
+
+    private String validBody(String noWinWeightProperty) {
+        return """
+                {
+                  "activityName": "八月抽奖",
+                  "startTime": "2026-08-01T10:00:00",
+                  "endTime": "2026-08-10T22:00:00",
+                  "dailyLimit": 3%s
+                }
+                """.formatted(noWinWeightProperty);
     }
 }

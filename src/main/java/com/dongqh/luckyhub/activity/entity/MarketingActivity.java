@@ -26,6 +26,7 @@ public class MarketingActivity {
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private Integer dailyLimit;
+    private Integer noWinWeight;
     private Long createdBy;
 
     @TableField(fill = FieldFill.INSERT)

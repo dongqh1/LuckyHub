@@ -63,7 +63,7 @@ class ActivityServiceTests {
     void createsTrimmedDraftForCurrentUser() {
         CreateActivityCommand command = new CreateActivityCommand(
                 "  八月抽奖  ", "  会员活动  ",
-                NOW.plusDays(1), NOW.plusDays(10), 3
+                NOW.plusDays(1), NOW.plusDays(10), 3, 25
         );
 
         service.create(command);
@@ -75,12 +75,28 @@ class ActivityServiceTests {
         assertThat(saved.getDescription()).isEqualTo("会员活动");
         assertThat(saved.getStatus()).isEqualTo(ActivityStatus.DRAFT);
         assertThat(saved.getCreatedBy()).isEqualTo(9L);
+        assertThat(saved.getNoWinWeight()).isEqualTo(25);
+    }
+
+    @Test
+    void updatesNoWinWeightAndReturnsIt() {
+        MarketingActivity activity = activity(ActivityStatus.DRAFT, NOW.plusDays(1), NOW.plusDays(10));
+        when(activityMapper.selectById(1L)).thenReturn(activity);
+
+        UpdateActivityCommand command = new UpdateActivityCommand(
+                "  新名称  ", "  新说明  ",
+                NOW.plusDays(2), NOW.plusDays(12), 5, 40
+        );
+
+        assertThat(service.update(1L, command).noWinWeight()).isEqualTo(40);
+        assertThat(activity.getNoWinWeight()).isEqualTo(40);
+        verify(activityMapper).updateById(activity);
     }
 
     @Test
     void rejectsInvalidTimeRangeBeforeInsert() {
         CreateActivityCommand command = new CreateActivityCommand(
-                "活动", null, NOW.plusDays(1), NOW.plusDays(1), 1
+                "活动", null, NOW.plusDays(1), NOW.plusDays(1), 1, 0
         );
 
         assertBusinessError(() -> service.create(command), ActivityErrorCode.ACTIVITY_TIME_INVALID);
@@ -118,9 +134,24 @@ class ActivityServiceTests {
     }
 
     @Test
+    void publishRejectsOnlyZeroTotalWeight() {
+        MarketingActivity zeroTotal = activity(ActivityStatus.DRAFT, NOW.plusHours(1), NOW.plusDays(1));
+        when(activityMapper.selectById(1L)).thenReturn(zeroTotal);
+        stubPublishablePrize(0);
+
+        assertBusinessError(() -> service.publish(1L), ActivityErrorCode.ACTIVITY_STATE_CONFLICT);
+
+        MarketingActivity noWinOnly = activity(ActivityStatus.DRAFT, NOW.plusHours(1), NOW.plusDays(1));
+        noWinOnly.setNoWinWeight(10);
+        when(activityMapper.selectById(1L)).thenReturn(noWinOnly);
+
+        assertThat(service.publish(1L).status()).isEqualTo(ActivityStatus.SCHEDULED);
+    }
+
+    @Test
     void endedAndDisabledActivitiesCannotBeUpdated() {
         UpdateActivityCommand command = new UpdateActivityCommand(
-                "新名称", null, NOW.plusDays(1), NOW.plusDays(2), 2
+                "新名称", null, NOW.plusDays(1), NOW.plusDays(2), 2, 0
         );
         MarketingActivity ended = activity(ActivityStatus.ENDED, NOW.minusDays(2), NOW.minusDays(1));
         when(activityMapper.selectById(1L)).thenReturn(ended);
@@ -145,9 +176,13 @@ class ActivityServiceTests {
     }
 
     private void stubPublishablePrize() {
+        stubPublishablePrize(10);
+    }
+
+    private void stubPublishablePrize(int weight) {
         MarketingActivityPrize relation = new MarketingActivityPrize();
         relation.setPrizeId(7L);
-        relation.setWeight(10);
+        relation.setWeight(weight);
         relation.setTotalStock(100);
         relation.setRemainingStock(100);
         MarketingPrize prize = new MarketingPrize();
@@ -169,6 +204,7 @@ class ActivityServiceTests {
         activity.setStartTime(startTime);
         activity.setEndTime(endTime);
         activity.setDailyLimit(1);
+        activity.setNoWinWeight(0);
         activity.setCreatedBy(9L);
         return activity;
     }

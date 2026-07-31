@@ -67,7 +67,7 @@ public class ActivityServiceImpl implements ActivityService {
         validateTimeRange(command.startTime(), command.endTime());
         MarketingActivity activity = new MarketingActivity();
         apply(activity, command.activityName(), command.description(),
-                command.startTime(), command.endTime(), command.dailyLimit());
+                command.startTime(), command.endTime(), command.dailyLimit(), command.noWinWeight());
         activity.setStatus(ActivityStatus.DRAFT);
         activity.setCreatedBy(LoginContext.require().userId());
         activityMapper.insert(activity);
@@ -110,7 +110,7 @@ public class ActivityServiceImpl implements ActivityService {
             throw new BusinessException(ActivityErrorCode.ACTIVITY_TIME_INVALID);
         }
         apply(activity, command.activityName(), command.description(),
-                command.startTime(), command.endTime(), command.dailyLimit());
+                command.startTime(), command.endTime(), command.dailyLimit(), command.noWinWeight());
         if (activity.getStatus() != ActivityStatus.DRAFT) {
             activity.setStatus(resolvePublishedStatus(command.startTime()));
         }
@@ -129,7 +129,7 @@ public class ActivityServiceImpl implements ActivityService {
         if (!activity.getEndTime().isAfter(now())) {
             throw new BusinessException(ActivityErrorCode.ACTIVITY_TIME_INVALID);
         }
-        validatePrizeConfiguration(id);
+        validatePrizeConfiguration(activity);
         activity.setStatus(resolvePublishedStatus(activity.getStartTime()));
         activityMapper.updateById(activity);
         return toView(activity);
@@ -158,10 +158,10 @@ public class ActivityServiceImpl implements ActivityService {
         return toView(activity);
     }
 
-    private void validatePrizeConfiguration(long activityId) {
+    private void validatePrizeConfiguration(MarketingActivity activity) {
         List<MarketingActivityPrize> relations = relationMapper.selectList(
                 new LambdaQueryWrapper<MarketingActivityPrize>()
-                        .eq(MarketingActivityPrize::getActivityId, activityId)
+                        .eq(MarketingActivityPrize::getActivityId, activity.getId())
         );
         if (relations.isEmpty()) {
             throw new BusinessException(ActivityErrorCode.ACTIVITY_HAS_NO_PRIZE);
@@ -177,12 +177,22 @@ public class ActivityServiceImpl implements ActivityService {
             throw new BusinessException(ActivityErrorCode.ACTIVITY_HAS_DISABLED_PRIZE);
         }
         boolean invalid = relations.stream().anyMatch(relation ->
-                relation.getWeight() == null || relation.getWeight() <= 0
+                relation.getWeight() == null || relation.getWeight() < 0
                         || relation.getTotalStock() == null || relation.getTotalStock() < 0
                         || relation.getRemainingStock() == null || relation.getRemainingStock() < 0
                         || relation.getRemainingStock() > relation.getTotalStock()
         );
         if (invalid) {
+            throw new BusinessException(ActivityErrorCode.ACTIVITY_STATE_CONFLICT);
+        }
+        if (activity.getNoWinWeight() == null || activity.getNoWinWeight() < 0) {
+            throw new BusinessException(ActivityErrorCode.ACTIVITY_STATE_CONFLICT);
+        }
+        long totalWeight = activity.getNoWinWeight();
+        for (MarketingActivityPrize relation : relations) {
+            totalWeight += relation.getWeight();
+        }
+        if (totalWeight <= 0) {
             throw new BusinessException(ActivityErrorCode.ACTIVITY_STATE_CONFLICT);
         }
         if (relations.stream().noneMatch(relation -> relation.getRemainingStock() > 0)) {
@@ -218,13 +228,15 @@ public class ActivityServiceImpl implements ActivityService {
             String description,
             LocalDateTime startTime,
             LocalDateTime endTime,
-            Integer dailyLimit
+            Integer dailyLimit,
+            Integer noWinWeight
     ) {
         activity.setActivityName(activityName.trim());
         activity.setDescription(normalize(description));
         activity.setStartTime(startTime);
         activity.setEndTime(endTime);
         activity.setDailyLimit(dailyLimit);
+        activity.setNoWinWeight(noWinWeight);
     }
 
     private String normalize(String value) {
@@ -240,6 +252,7 @@ public class ActivityServiceImpl implements ActivityService {
                 activity.getStartTime(),
                 activity.getEndTime(),
                 activity.getDailyLimit(),
+                activity.getNoWinWeight(),
                 activity.getCreatedBy(),
                 activity.getCreatedAt(),
                 activity.getUpdatedAt()

@@ -3,6 +3,7 @@ package com.dongqh.luckyhub.activity.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
@@ -23,6 +24,10 @@ public record CreateActivityCommand(
 
         @NotNull(message = "每日参与次数不能为空")
         @Positive(message = "每日参与次数必须大于0")
-        Integer dailyLimit
+        Integer dailyLimit,
+
+        @NotNull(message = "未中奖权重不能为空")
+        @PositiveOrZero(message = "未中奖权重不能小于0")
+        Integer noWinWeight
 ) {
 }

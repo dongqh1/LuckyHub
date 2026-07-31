@@ -12,6 +12,7 @@ public record ActivityView(
         LocalDateTime startTime,
         LocalDateTime endTime,
         Integer dailyLimit,
+        Integer noWinWeight,
         Long createdBy,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
