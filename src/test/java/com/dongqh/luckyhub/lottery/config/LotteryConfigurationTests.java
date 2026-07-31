@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 class LotteryConfigurationTests {
@@ -43,5 +44,27 @@ class LotteryConfigurationTests {
                 .isEqualTo("luckyhub:stream:lottery");
         assertThat(environment.getProperty("luckyhub.messaging.lottery-group"))
                 .isEqualTo("luckyhub-lottery-consumers");
+    }
+
+    @Test
+    void rejectsUnsafeMessagingAndOutboxSettings() {
+        assertThatThrownBy(() -> new MessagingProperties(true, "redis-stream", " ", "group",
+                "consumer", 20, Duration.ofSeconds(1), Duration.ofSeconds(30), Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagingProperties(true, "redis-stream", "stream", " ",
+                "consumer", 20, Duration.ofSeconds(1), Duration.ofSeconds(30), Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagingProperties(true, "redis-stream", "stream", "group",
+                "consumer", 20, Duration.ZERO, Duration.ofSeconds(30), Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagingProperties(true, "redis-stream", "stream", "group",
+                "consumer", 20, Duration.ofSeconds(1), Duration.ZERO, Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new MessagingProperties(true, "redis-stream", "stream", "group",
+                "consumer", 20, Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(30)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LotteryProperties(ZoneId.of("Asia/Shanghai"), Duration.ofSeconds(1),
+                Duration.ofMinutes(2), Duration.ofSeconds(30), Duration.ofHours(72),
+                Duration.ofSeconds(5), 0)).isInstanceOf(IllegalArgumentException.class);
     }
 }

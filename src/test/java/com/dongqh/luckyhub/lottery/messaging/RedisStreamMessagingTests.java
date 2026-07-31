@@ -27,8 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
@@ -45,10 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest(properties = {
-        "luckyhub.lottery.outbox-interval=1h",
-        "luckyhub.messaging.consumer-poll-interval=1h"
-})
+@SpringBootTest(properties = "luckyhub.messaging.enabled=false")
 class RedisStreamMessagingTests {
 
     @Autowired StringRedisTemplate redisTemplate;
@@ -57,7 +53,6 @@ class RedisStreamMessagingTests {
     @Autowired MessageConsumeRecordMapper consumeRecordMapper;
     @Autowired MessageConsumeService consumeService;
     @Autowired DrawQuotaService quotaService;
-    @Autowired PlatformTransactionManager transactionManager;
 
     private final Set<String> streams = new java.util.HashSet<>();
     private final Set<String> eventIds = new java.util.HashSet<>();
@@ -112,6 +107,33 @@ class RedisStreamMessagingTests {
     }
 
     @Test
+    void initializerConsumesARealEventThatAlreadyExistedBeforeGroupCreation() {
+        String stream = "task11:stream:" + UUID.randomUUID();
+        String group = "task11-group-" + UUID.randomUUID();
+        streams.add(stream);
+        MessagingProperties properties = properties(stream, group);
+        RedisStreamInitializer initializer = new RedisStreamInitializer(redisTemplate, properties);
+        RedisStreamDrawEventPublisher publisher =
+                new RedisStreamDrawEventPublisher(redisTemplate, objectMapper, properties);
+        RedisStreamDrawEventConsumer consumer =
+                new RedisStreamDrawEventConsumer(redisTemplate, objectMapper, consumeService, properties);
+        long activityId = positiveRandomLong();
+        long userId = positiveRandomLong();
+        String requestId = "task11-before-group-" + UUID.randomUUID();
+        reserve(requestId, activityId, userId);
+        DrawEventEnvelope event = confirmedEvent(requestId, activityId, userId);
+        eventIds.add(event.eventId().toString());
+
+        publisher.publish(event);
+        initializer.initialize();
+
+        assertThat(consumer.pollOnce()).isOne();
+        assertThat(redisTemplate.opsForHash().get(
+                DrawQuotaKeys.reservation(requestId), "status")).isEqualTo("CONFIRMED");
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isZero();
+    }
+
+    @Test
     void relayMarksSentOnlyAfterPublishAndRecordsRetryMetadataOnFailure() {
         DrawEventEnvelope success = confirmedEvent();
         DrawEventEnvelope failure = confirmedEvent();
@@ -136,6 +158,17 @@ class RedisStreamMessagingTests {
         assertThat(failed.getRetryCount()).isOne();
         assertThat(failed.getNextRetryAt()).isNotNull();
         assertThat(failed.getLastError()).contains("broker unavailable");
+
+        AtomicInteger retries = new AtomicInteger();
+        OutboxRelayService retryRelay = new OutboxRelayService(
+                outboxMapper, ignored -> retries.incrementAndGet(), objectMapper, 100);
+        retryRelay.relayBatch();
+        assertThat(retries).hasValue(0);
+        failed.setNextRetryAt(LocalDateTime.now().minusSeconds(1));
+        outboxMapper.updateById(failed);
+        retryRelay.relayBatch();
+        assertThat(retries).hasValue(1);
+        assertThat(find(failure).getStatus()).isEqualTo(OutboxStatus.SENT);
     }
 
     @Test
@@ -216,6 +249,55 @@ class RedisStreamMessagingTests {
         publisher.publish(fulfillment);
         assertThat(consumer.pollOnce()).isZero();
         assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isOne();
+
+        try {
+            Thread.sleep(properties.claimIdle().plusMillis(20).toMillis());
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
+        String laterRequest = "task11-later-" + UUID.randomUUID();
+        reserve(laterRequest, activityId, userId);
+        DrawEventEnvelope later = confirmedEvent(laterRequest, activityId, userId);
+        eventIds.add(later.eventId().toString());
+        publisher.publish(later);
+
+        assertThat(consumer.pollOnce()).isOne();
+        assertThat(redisTemplate.opsForHash().get(
+                DrawQuotaKeys.reservation(laterRequest), "status")).isEqualTo("CONFIRMED");
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isOne();
+    }
+
+    @Test
+    void stalePendingMessageIsClaimedByAnotherInstanceAndAcknowledged() throws Exception {
+        String stream = "task11:stream:" + UUID.randomUUID();
+        String group = "task11-group-" + UUID.randomUUID();
+        streams.add(stream);
+        MessagingProperties properties = properties(stream, group);
+        RedisStreamInitializer initializer = new RedisStreamInitializer(redisTemplate, properties);
+        RedisStreamDrawEventPublisher publisher =
+                new RedisStreamDrawEventPublisher(redisTemplate, objectMapper, properties);
+        initializer.initialize();
+        long activityId = positiveRandomLong();
+        long userId = positiveRandomLong();
+        String requestId = "task11-stale-" + UUID.randomUUID();
+        reserve(requestId, activityId, userId);
+        DrawEventEnvelope event = confirmedEvent(requestId, activityId, userId);
+        eventIds.add(event.eventId().toString());
+        publisher.publish(event);
+        redisTemplate.opsForStream().read(
+                org.springframework.data.redis.connection.stream.Consumer.from(group, "dead-instance"),
+                org.springframework.data.redis.connection.stream.StreamReadOptions.empty().count(1),
+                org.springframework.data.redis.connection.stream.StreamOffset.create(
+                        stream, org.springframework.data.redis.connection.stream.ReadOffset.lastConsumed()));
+        Thread.sleep(properties.claimIdle().plusMillis(20).toMillis());
+        RedisStreamDrawEventConsumer recovery =
+                new RedisStreamDrawEventConsumer(redisTemplate, objectMapper, consumeService, properties);
+
+        assertThat(recovery.pollOnce()).isOne();
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isZero();
+        assertThat(redisTemplate.opsForHash().get(
+                DrawQuotaKeys.reservation(requestId), "status")).isEqualTo("CONFIRMED");
     }
 
     @Test
@@ -227,18 +309,17 @@ class RedisStreamMessagingTests {
         DrawEventPublisher countingPublisher = ignored -> publications.incrementAndGet();
         OutboxRelayService first = new OutboxRelayService(outboxMapper, countingPublisher, objectMapper, 1);
         OutboxRelayService second = new OutboxRelayService(outboxMapper, countingPublisher, objectMapper, 1);
-        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
         CountDownLatch start = new CountDownLatch(1);
         var executor = Executors.newFixedThreadPool(2);
         try {
             Future<?> one = executor.submit(() -> {
                 start.await();
-                transactions.executeWithoutResult(status -> first.relayBatch());
+                first.relayBatch();
                 return null;
             });
             Future<?> two = executor.submit(() -> {
                 start.await();
-                transactions.executeWithoutResult(status -> second.relayBatch());
+                second.relayBatch();
                 return null;
             });
             start.countDown();
@@ -252,8 +333,52 @@ class RedisStreamMessagingTests {
         assertThat(find(event).getStatus()).isEqualTo(OutboxStatus.SENT);
     }
 
+    @Test
+    void relayPublishesOutsideDatabaseTransactionAndRecoversAnExpiredLease() throws Exception {
+        assertThat(OutboxRelayService.class.getMethod("relayBatch").getAnnotation(Transactional.class)).isNull();
+        DrawEventEnvelope event = confirmedEvent();
+        eventIds.add(event.eventId().toString());
+        insertOutbox(event);
+        MessageOutbox row = find(event);
+        row.setStatus(OutboxStatus.PROCESSING);
+        row.setClaimToken("dead-instance-token");
+        row.setNextRetryAt(LocalDateTime.now().minusSeconds(1));
+        outboxMapper.updateById(row);
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch allowPublish = new CountDownLatch(1);
+        OutboxRelayService relay = new OutboxRelayService(outboxMapper, ignored -> {
+            publishing.countDown();
+            try {
+                if (!allowPublish.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("publish timeout");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+        }, objectMapper, 1, java.time.Duration.ofSeconds(30));
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> result = executor.submit(relay::relayBatch);
+            assertThat(publishing.await(5, TimeUnit.SECONDS)).isTrue();
+            MessageOutbox claimed = find(event);
+            assertThat(claimed.getStatus()).isEqualTo(OutboxStatus.PROCESSING);
+            assertThat(claimed.getClaimToken()).isNotEqualTo("dead-instance-token");
+            claimed.setLastError("database-remains-writable-during-publish");
+            assertThat(outboxMapper.updateById(claimed)).isOne();
+            allowPublish.countDown();
+            assertThat(result.get(5, TimeUnit.SECONDS)).isOne();
+        } finally {
+            allowPublish.countDown();
+            executor.shutdownNow();
+        }
+        assertThat(find(event).getStatus()).isEqualTo(OutboxStatus.SENT);
+    }
+
     private MessagingProperties properties(String stream, String group) {
-        return new MessagingProperties("redis-stream", stream, group, "lottery-core", 20, java.time.Duration.ofMillis(10));
+        return new MessagingProperties(false, "redis-stream", stream, group,
+                "task11-core-" + UUID.randomUUID(), 20,
+                java.time.Duration.ofMillis(10), java.time.Duration.ofMillis(100), java.time.Duration.ofSeconds(30));
     }
 
     private DrawEventEnvelope confirmedEvent() {
@@ -261,6 +386,13 @@ class RedisStreamMessagingTests {
                 "task11-" + UUID.randomUUID(), 11L, 12L, 13L,
                 LocalDateTime.of(2026, 7, 31, 22, 0),
                 new DrawConfirmedEvent(1, LocalDate.of(2026, 7, 31)), objectMapper);
+    }
+
+    private DrawEventEnvelope confirmedEvent(String requestId, long activityId, long userId) {
+        return new DrawEventEnvelope(UUID.randomUUID(), DrawEventType.DRAW_CONFIRMED, 1,
+                requestId, userId, activityId, positiveRandomLong(), LocalDateTime.now(),
+                objectMapper.valueToTree(new DrawConfirmedEvent(1,
+                        LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")))));
     }
 
     private void insertOutbox(DrawEventEnvelope event) {

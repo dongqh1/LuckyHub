@@ -3,7 +3,7 @@ package com.dongqh.luckyhub.lottery.messaging.redis;
 import com.dongqh.luckyhub.lottery.config.MessagingProperties;
 import com.dongqh.luckyhub.lottery.messaging.event.DrawEventEnvelope;
 import com.dongqh.luckyhub.lottery.messaging.port.DrawEventPublisher;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Component
-@ConditionalOnProperty(prefix = "luckyhub.messaging", name = "provider", havingValue = "redis-stream")
+@ConditionalOnExpression("'${luckyhub.messaging.enabled:true}' == 'true' and '${luckyhub.messaging.provider:redis-stream}' == 'redis-stream'")
 public class RedisStreamDrawEventPublisher implements DrawEventPublisher {
 
     private final StringRedisTemplate redisTemplate;

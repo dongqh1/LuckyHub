@@ -126,6 +126,23 @@ class DatabaseSchemaMigrationTests {
     }
 
     @Test
+    void addsRecoverableOutboxLeaseThroughVersionSevenMigration() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version = '7' AND success = 1
+                """, Integer.class);
+        Integer claimTokenColumn = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'message_outbox'
+                  AND column_name = 'claim_token'
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isEqualTo(1);
+        assertThat(claimTokenColumn).isEqualTo(1);
+    }
+
+    @Test
     void seedsPrizePermissionsAndGrantsThemToAdmin() {
         Integer successfulMigration = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)

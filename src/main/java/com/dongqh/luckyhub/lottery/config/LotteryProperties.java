@@ -15,4 +15,9 @@ public record LotteryProperties(
         Duration outboxInterval,
         int outboxBatchSize
 ) {
+    public LotteryProperties {
+        if (outboxBatchSize <= 0) {
+            throw new IllegalArgumentException("outboxBatchSize must be positive");
+        }
+    }
 }

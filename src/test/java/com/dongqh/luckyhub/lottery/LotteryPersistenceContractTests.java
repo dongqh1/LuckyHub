@@ -38,7 +38,7 @@ class LotteryPersistenceContractTests {
                 BenefitStatus.PENDING, BenefitStatus.AVAILABLE,
                 BenefitStatus.CLAIM_PENDING, BenefitStatus.GRANT_FAILED);
         assertThat(OutboxStatus.values()).containsExactly(
-                OutboxStatus.PENDING, OutboxStatus.SENT, OutboxStatus.FAILED);
+                OutboxStatus.PENDING, OutboxStatus.PROCESSING, OutboxStatus.SENT, OutboxStatus.FAILED);
     }
 
     @Test
@@ -81,6 +81,7 @@ class LotteryPersistenceContractTests {
         assertField(MessageOutbox.class, "status", OutboxStatus.class);
         assertField(MessageOutbox.class, "retryCount", Integer.class);
         assertField(MessageOutbox.class, "lastError", String.class);
+        assertField(MessageOutbox.class, "claimToken", String.class);
         assertField(MessageOutbox.class, "nextRetryAt", LocalDateTime.class);
         assertField(MessageOutbox.class, "createdAt", LocalDateTime.class);
         assertField(MessageOutbox.class, "sentAt", LocalDateTime.class);

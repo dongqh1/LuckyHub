@@ -1,7 +1,7 @@
 package com.dongqh.luckyhub.lottery.messaging.redis;
 
 import com.dongqh.luckyhub.lottery.config.MessagingProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.stream.ReadOffset;
@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 @Component
-@ConditionalOnProperty(prefix = "luckyhub.messaging", name = "provider", havingValue = "redis-stream")
+@ConditionalOnExpression("'${luckyhub.messaging.enabled:true}' == 'true' and '${luckyhub.messaging.provider:redis-stream}' == 'redis-stream'")
 public class RedisStreamInitializer {
 
     private final StringRedisTemplate redisTemplate;
@@ -30,7 +30,7 @@ public class RedisStreamInitializer {
                 properties.lotteryStream(), Map.of("initializer", "group-bootstrap"));
         try {
             redisTemplate.opsForStream().createGroup(
-                    properties.lotteryStream(), ReadOffset.latest(), properties.lotteryGroup());
+                    properties.lotteryStream(), ReadOffset.from("0-0"), properties.lotteryGroup());
         } catch (DataAccessException exception) {
             if (!isBusyGroup(exception)) {
                 throw exception;

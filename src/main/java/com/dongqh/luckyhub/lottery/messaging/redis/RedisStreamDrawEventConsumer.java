@@ -6,7 +6,7 @@ import com.dongqh.luckyhub.lottery.service.MessageConsumeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.Consumer;
 import org.springframework.data.redis.connection.stream.MapRecord;
@@ -28,7 +28,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
-@ConditionalOnProperty(prefix = "luckyhub.messaging", name = "provider", havingValue = "redis-stream")
+@ConditionalOnExpression("'${luckyhub.messaging.enabled:true}' == 'true' and '${luckyhub.messaging.provider:redis-stream}' == 'redis-stream'")
 public class RedisStreamDrawEventConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(RedisStreamDrawEventConsumer.class);
@@ -61,7 +61,10 @@ public class RedisStreamDrawEventConsumer {
         this.consumerName = properties.logicalConsumerName() + '-' + instanceIdentity;
     }
 
-    @Scheduled(fixedDelayString = "${luckyhub.messaging.consumer-poll-interval:1s}")
+    @Scheduled(
+            fixedDelayString = "${luckyhub.messaging.consumer-poll-interval:1s}",
+            initialDelayString = "${luckyhub.messaging.consumer-initial-delay:60s}"
+    )
     public void poll() {
         try {
             pollOnce();
@@ -71,13 +74,15 @@ public class RedisStreamDrawEventConsumer {
     }
 
     public int pollOnce() {
-        List<MapRecord<String, Object, Object>> records = claimStalePending();
-        if (records.isEmpty()) {
-            records = redisTemplate.opsForStream().read(
-                    Consumer.from(properties.lotteryGroup(), consumerName),
-                    StreamReadOptions.empty().count(properties.consumerBatchSize()),
-                    StreamOffset.create(properties.lotteryStream(), ReadOffset.lastConsumed()));
-        }
+        int acknowledged = process(claimStalePending());
+        List<MapRecord<String, Object, Object>> newRecords = redisTemplate.opsForStream().read(
+                Consumer.from(properties.lotteryGroup(), consumerName),
+                StreamReadOptions.empty().count(properties.consumerBatchSize()),
+                StreamOffset.create(properties.lotteryStream(), ReadOffset.lastConsumed()));
+        return acknowledged + process(newRecords);
+    }
+
+    private int process(List<MapRecord<String, Object, Object>> records) {
         if (records == null || records.isEmpty()) {
             return 0;
         }
@@ -110,7 +115,7 @@ public class RedisStreamDrawEventConsumer {
     private List<MapRecord<String, Object, Object>> claimStalePending() {
         PendingMessages pending = redisTemplate.opsForStream().pending(
                 properties.lotteryStream(), properties.lotteryGroup(), Range.unbounded(),
-                properties.consumerBatchSize(), properties.consumerPollInterval());
+                properties.consumerBatchSize(), properties.claimIdle());
         if (pending == null || pending.isEmpty()) {
             return List.of();
         }
@@ -120,7 +125,7 @@ public class RedisStreamDrawEventConsumer {
         }
         List<MapRecord<String, Object, Object>> claimed = redisTemplate.opsForStream().claim(
                 properties.lotteryStream(), properties.lotteryGroup(), consumerName,
-                properties.consumerPollInterval(), ids.toArray(RecordId[]::new));
+                properties.claimIdle(), ids.toArray(RecordId[]::new));
         return claimed == null ? List.of() : claimed;
     }
 
