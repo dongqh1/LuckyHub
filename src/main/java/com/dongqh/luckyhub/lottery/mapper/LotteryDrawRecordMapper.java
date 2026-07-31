@@ -16,4 +16,16 @@ public interface LotteryDrawRecordMapper extends BaseMapper<LotteryDrawRecord> {
             ORDER BY r.sequence_no
             """)
     List<LotteryDrawRecord> selectByOrderId(@Param("orderId") long orderId);
+
+    @Select("""
+            <script>
+            SELECT r.*, b.id AS benefit_id
+            FROM lottery_draw_record r
+            LEFT JOIN user_benefit b ON b.draw_record_id = r.id
+            WHERE r.order_id IN
+            <foreach collection='orderIds' item='id' open='(' separator=',' close=')'>#{id}</foreach>
+            ORDER BY r.order_id, r.sequence_no
+            </script>
+            """)
+    List<LotteryDrawRecord> selectByOrderIds(@Param("orderIds") List<Long> orderIds);
 }

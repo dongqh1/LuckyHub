@@ -26,7 +26,11 @@ public class PermissionInterceptorConfig
         registry.addInterceptor(
                         permissionInterceptor
                 )
-                .addPathPatterns("/api/admin/**")
+                .addPathPatterns(
+                        "/api/admin/**",
+                        "/api/lottery/**",
+                        "/api/benefits/**"
+                )
                 .order(100);
     }
 }

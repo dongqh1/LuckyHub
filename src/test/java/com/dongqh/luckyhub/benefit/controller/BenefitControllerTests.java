@@ -1,0 +1,84 @@
+package com.dongqh.luckyhub.benefit.controller;
+
+import com.dongqh.luckyhub.benefit.dto.BenefitQuery;
+import com.dongqh.luckyhub.benefit.enums.BenefitStatus;
+import com.dongqh.luckyhub.benefit.service.BenefitQueryService;
+import com.dongqh.luckyhub.benefit.vo.BenefitView;
+import com.dongqh.luckyhub.auth.context.LoginContext;
+import com.dongqh.luckyhub.auth.model.LoginPrincipal;
+import com.dongqh.luckyhub.common.result.PageResponse;
+import com.dongqh.luckyhub.common.web.GlobalExceptionHandler;
+import com.dongqh.luckyhub.prize.enums.PrizeType;
+import com.dongqh.luckyhub.rbac.annotation.RequirePermission;
+import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
+import com.dongqh.luckyhub.rbac.interceptor.PermissionInterceptor;
+import com.dongqh.luckyhub.rbac.service.UserPermissionService;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.lang.reflect.Method;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+class BenefitControllerTests {
+    private BenefitQueryService service;
+    private MockMvc mockMvc;
+    private UserPermissionService permissionService;
+
+    @BeforeEach
+    void setUp() {
+        service = mock(BenefitQueryService.class);
+        permissionService = mock(UserPermissionService.class);
+        LoginContext.set(new LoginPrincipal(77L, "tester", "session"));
+        when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of(PermissionCodes.BENEFIT_READ));
+        mockMvc = MockMvcBuilders.standaloneSetup(new BenefitController(service))
+                .addInterceptors(new PermissionInterceptor(permissionService))
+                .setControllerAdvice(new GlobalExceptionHandler()).build();
+    }
+
+    @AfterEach void tearDown() { LoginContext.clear(); }
+
+    @Test
+    void exposesBenefitListAndDetail() throws Exception {
+        BenefitView view = new BenefitView(3L, 4L, 5L, 6L, PrizeType.COUPON, "咖啡券",
+                "https://cdn/prize.png", 1, BenefitStatus.AVAILABLE, LocalDateTime.now(), null);
+        when(service.page(any())).thenReturn(new PageResponse<>(List.of(view), 1, 1, 20, 1));
+        when(service.getById(3L)).thenReturn(view);
+
+        mockMvc.perform(get("/api/benefits"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].prizeName").value("咖啡券"));
+        mockMvc.perform(get("/api/benefits/3"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(3));
+    }
+
+    @Test
+    void validatesPaginationAndAssignsBasePermission() throws Exception {
+        mockMvc.perform(get("/api/benefits").param("size", "0")).andExpect(status().isBadRequest());
+        assertPermission("page", BenefitQuery.class);
+        assertPermission("getById", long.class);
+    }
+
+    @Test void rejectsAnonymousAndCallerWithoutBenefitRead() throws Exception {
+        LoginContext.clear();
+        mockMvc.perform(get("/api/benefits")).andExpect(status().isUnauthorized());
+        LoginContext.set(new LoginPrincipal(77L, "tester", "session"));
+        when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of());
+        mockMvc.perform(get("/api/benefits")).andExpect(status().isForbidden());
+    }
+
+    private void assertPermission(String name, Class<?>... types) throws Exception {
+        Method method = BenefitController.class.getMethod(name, types);
+        assertThat(method.getAnnotation(RequirePermission.class).value()).isEqualTo(PermissionCodes.BENEFIT_READ);
+    }
+}

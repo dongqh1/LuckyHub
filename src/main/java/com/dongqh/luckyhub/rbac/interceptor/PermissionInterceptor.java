@@ -55,13 +55,13 @@ public class PermissionInterceptor
         //找到注解权限
 
         /*
-         * /api/admin/** 下只要匹配到 Controller，
+         * 受保护路径下只要匹配到 Controller，
          * 却没有配置权限注解，就默认拒绝。
          */
         if (requirement == null
                 || requirement.value().isBlank()) {
             log.error(
-                    "Admin endpoint has no permission annotation: "
+                    "Protected endpoint has no permission annotation: "
                             + "{}#{}",
                     handlerMethod.getBeanType().getName(),
                     handlerMethod.getMethod().getName()

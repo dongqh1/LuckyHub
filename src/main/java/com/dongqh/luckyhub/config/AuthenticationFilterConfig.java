@@ -31,7 +31,9 @@ public class AuthenticationFilterConfig {
         registration.addUrlPatterns(
                 "/api/auth/me",
                 "/api/auth/logout",
-                "/api/admin/*"
+                "/api/admin/*",
+                "/api/lottery/*",
+                "/api/benefits/*"
         );
 
         registration.setOrder(20);
