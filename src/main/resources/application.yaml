@@ -36,6 +36,18 @@ springdoc:
     path: /swagger-ui.html
 
 luckyhub:
+  lottery:
+    zone-id: Asia/Shanghai
+    lock-wait: 3s
+    processing-timeout: 2m
+    reconcile-interval: 30s
+    reservation-retention: 72h
+    outbox-interval: 5s
+    outbox-batch-size: 100
+  messaging:
+    provider: redis-stream
+    lottery-stream: luckyhub:stream:lottery
+    lottery-group: luckyhub-lottery-consumers
   activity:
     status-refresh-interval: ${ACTIVITY_STATUS_REFRESH_INTERVAL:30000}
     status-refresh-initial-delay: ${ACTIVITY_STATUS_REFRESH_INITIAL_DELAY:0}
