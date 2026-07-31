@@ -12,6 +12,7 @@ local createdAt = ARGV[7]
 local timeoutAt = ARGV[8]
 local expiresAt = ARGV[9]
 
+-- dailyLimit is a current server policy snapshot, not part of the idempotency identity.
 if redis.call('EXISTS', reservationKey) == 1 then
     local existing = redis.call('HMGET', reservationKey,
             'activityId', 'userId', 'drawCount', 'drawDate', 'status')

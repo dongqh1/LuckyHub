@@ -6,23 +6,39 @@ local expectedActivityId = ARGV[2]
 local expectedUserId = ARGV[3]
 local expectedDrawDate = ARGV[4]
 
-local status = redis.call('HGET', reservationKey, 'status')
-if not status then
+if redis.call('EXISTS', reservationKey) == 0 then
+    redis.call('ZREM', timeoutKey, requestId)
+    return 0
+end
+
+local reservation = redis.call('HMGET', reservationKey,
+        'requestId', 'activityId', 'userId', 'drawCount', 'drawDate', 'status', 'createdAt')
+for index = 1, 7 do
+    if not reservation[index] then
+        return -1
+    end
+end
+local drawCount = tonumber(reservation[4])
+local createdAt = tonumber(reservation[7])
+if reservation[1] ~= requestId or not drawCount or (drawCount ~= 1 and drawCount ~= 10)
+        or not createdAt then
+    return -1
+end
+
+local status = reservation[6]
+if status == 'CONFIRMED' or status == 'RELEASED' then
     redis.call('ZREM', timeoutKey, requestId)
     return 0
 end
 if status ~= 'RESERVED' then
-    redis.call('ZREM', timeoutKey, requestId)
-    return 2
-end
-
-local identity = redis.call('HMGET', reservationKey, 'activityId', 'userId', 'drawDate')
-if quotaKey == '' or identity[1] ~= expectedActivityId
-        or identity[2] ~= expectedUserId or identity[3] ~= expectedDrawDate then
     return -1
 end
 
-local drawCount = tonumber(redis.call('HGET', reservationKey, 'drawCount') or '0')
+if quotaKey == '' or reservation[2] ~= expectedActivityId
+        or reservation[3] ~= expectedUserId or reservation[5] ~= expectedDrawDate then
+    return -1
+end
+
 if redis.call('EXISTS', quotaKey) == 1 then
     local used = tonumber(redis.call('GET', quotaKey) or '0')
     local remaining = used - drawCount

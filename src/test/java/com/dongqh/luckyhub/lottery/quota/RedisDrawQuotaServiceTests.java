@@ -141,6 +141,29 @@ class RedisDrawQuotaServiceTests {
     }
 
     @Test
+    void changedDailyLimitStillReturnsDuplicateFromOriginalReservation() {
+        long activityId = uniqueLong();
+        long userId = uniqueLong();
+        String requestId = requestId();
+        service.reserve(request(requestId, activityId, userId, 1, 5));
+        RedisDrawQuotaService nextDayService = new RedisDrawQuotaService(
+                redisTemplate,
+                properties,
+                Clock.fixed(Instant.parse("2026-07-31T16:01:00Z"), SHANGHAI)
+        );
+
+        QuotaReservationResult duplicate = nextDayService.reserve(
+                request(requestId, activityId, userId, 1, 99));
+
+        assertThat(duplicate.duplicate()).isTrue();
+        assertThat(duplicate.drawDate()).isEqualTo(LocalDate.of(2026, 7, 31));
+        assertThat(redisTemplate.opsForValue().get(quotaKey(activityId, userId))).isEqualTo("1");
+        String nextDayQuota = DrawQuotaKeys.quota(activityId, userId, LocalDate.of(2026, 8, 1));
+        quotaKeys.add(nextDayQuota);
+        assertThat(redisTemplate.hasKey(nextDayQuota)).isFalse();
+    }
+
+    @Test
     void storesShanghaiDrawDateMetadataTimeoutIndexAndDateAnchoredTtl() {
         long activityId = uniqueLong();
         long userId = uniqueLong();
@@ -188,6 +211,48 @@ class RedisDrawQuotaServiceTests {
         assertThat(redisTemplate.opsForValue().get(quotaKey(activityId, userId))).isEqualTo("1");
         assertThat(redisTemplate.opsForZSet().score(DrawQuotaKeys.reservationTimeouts(), confirmedId)).isNull();
         assertThat(redisTemplate.opsForZSet().score(DrawQuotaKeys.reservationTimeouts(), releasedId)).isNull();
+    }
+
+    @Test
+    void releaseRejectsReservationHashWithMissingIdentityWithoutChangingStateOrTimeout() {
+        String requestId = requestId();
+        String reservationKey = trackReservation(requestId);
+        redisTemplate.opsForHash().putAll(reservationKey, Map.of(
+                "activityId", "123",
+                "userId", "456",
+                "drawCount", "1",
+                "status", "RESERVED"
+        ));
+        redisTemplate.opsForZSet().add(DrawQuotaKeys.reservationTimeouts(), requestId, 123D);
+
+        assertThatThrownBy(() -> service.release(requestId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
+        assertThat(status(requestId)).isEqualTo("RESERVED");
+        assertThat(redisTemplate.opsForZSet().score(DrawQuotaKeys.reservationTimeouts(), requestId))
+                .isEqualTo(123D);
+    }
+
+    @Test
+    void confirmRejectsReservationHashWithMissingIdentityWithoutChangingStateOrTimeout() {
+        String requestId = requestId();
+        String reservationKey = trackReservation(requestId);
+        redisTemplate.opsForHash().putAll(reservationKey, Map.of(
+                "activityId", "123",
+                "drawCount", "1",
+                "drawDate", "20260731",
+                "status", "RESERVED"
+        ));
+        redisTemplate.opsForZSet().add(DrawQuotaKeys.reservationTimeouts(), requestId, 456D);
+
+        assertThatThrownBy(() -> service.confirm(requestId))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
+        assertThat(status(requestId)).isEqualTo("RESERVED");
+        assertThat(redisTemplate.opsForZSet().score(DrawQuotaKeys.reservationTimeouts(), requestId))
+                .isEqualTo(456D);
     }
 
     @Test
@@ -251,6 +316,13 @@ class RedisDrawQuotaServiceTests {
 
     private String requestId() {
         return "task6-test-" + UUID.randomUUID();
+    }
+
+    private String trackReservation(String requestId) {
+        String reservationKey = DrawQuotaKeys.reservation(requestId);
+        reservationKeys.add(reservationKey);
+        requestIds.add(requestId);
+        return reservationKey;
     }
 
     private String quotaKey(long activityId, long userId) {

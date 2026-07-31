@@ -73,6 +73,8 @@ public class RedisDrawQuotaService implements DrawQuotaService {
                     Long.toString(now.plus(properties.processingTimeout()).toEpochMilli()),
                     Long.toString(expiresAt)
             );
+            // The script compares requestId/userId/activityId/drawCount only. dailyLimit applies
+            // only when creating a reservation, so policy changes cannot break an existing retry.
             return mapReservationResponse(request, drawDate, response);
         } catch (BusinessException error) {
             throw error;
@@ -85,11 +87,12 @@ public class RedisDrawQuotaService implements DrawQuotaService {
     public void confirm(String requestId) {
         requireRequestId(requestId);
         try {
-            redisTemplate.execute(
+            Long result = redisTemplate.execute(
                     CONFIRM_SCRIPT,
                     List.of(DrawQuotaKeys.reservation(requestId), DrawQuotaKeys.reservationTimeouts()),
                     requestId
             );
+            requireValidTransitionResult(result);
         } catch (RuntimeException error) {
             throw new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
         }
@@ -103,17 +106,18 @@ public class RedisDrawQuotaService implements DrawQuotaService {
             List<Object> fields = redisTemplate.opsForHash().multiGet(
                     reservationKey, List.of("activityId", "userId", "drawDate"));
             if (fields.size() != 3 || fields.stream().anyMatch(value -> value == null)) {
-                redisTemplate.execute(
+                Long result = redisTemplate.execute(
                         RELEASE_SCRIPT,
                         List.of(reservationKey, DrawQuotaKeys.reservationTimeouts(), ""),
                         requestId, "", "", ""
                 );
+                requireValidTransitionResult(result);
                 return;
             }
             long activityId = Long.parseLong(fields.get(0).toString());
             long userId = Long.parseLong(fields.get(1).toString());
             LocalDate drawDate = LocalDate.parse(fields.get(2).toString(), DRAW_DATE);
-            redisTemplate.execute(
+            Long result = redisTemplate.execute(
                     RELEASE_SCRIPT,
                     List.of(
                             reservationKey,
@@ -125,6 +129,7 @@ public class RedisDrawQuotaService implements DrawQuotaService {
                     Long.toString(userId),
                     DRAW_DATE.format(drawDate)
             );
+            requireValidTransitionResult(result);
         } catch (RuntimeException error) {
             throw new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
         }
@@ -177,6 +182,12 @@ public class RedisDrawQuotaService implements DrawQuotaService {
     private void requireRequestId(String requestId) {
         if (!StringUtils.hasText(requestId) || requestId.length() > 64) {
             throw new BusinessException(LotteryErrorCode.DRAW_PARAMETER_INVALID);
+        }
+    }
+
+    private void requireValidTransitionResult(Long result) {
+        if (result == null || (result != 0L && result != 1L)) {
+            throw new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
         }
     }
 
