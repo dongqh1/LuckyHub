@@ -102,6 +102,21 @@ class LotteryControllerTests {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/lottery/orders").param("size", "101"))
                 .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/lottery/orders").param("page", Long.toString(Long.MAX_VALUE)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsUnsafeRecordDateBoundsBeforeServiceExecution() throws Exception {
+        mockMvc.perform(get("/api/lottery/records").param("endDate", LocalDate.MAX.toString()))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/lottery/records").param("endDate", "9999-12-31"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/lottery/records")
+                        .param("startDate", "2026-08-02").param("endDate", "2026-08-01"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/lottery/records").param("endDate", "9999-12-30"))
+                .andExpect(status().isOk());
     }
 
     @Test

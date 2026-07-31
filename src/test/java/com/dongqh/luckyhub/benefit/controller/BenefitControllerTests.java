@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -65,8 +66,20 @@ class BenefitControllerTests {
     @Test
     void validatesPaginationAndAssignsBasePermission() throws Exception {
         mockMvc.perform(get("/api/benefits").param("size", "0")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/benefits").param("page", Long.toString(Long.MAX_VALUE))).andExpect(status().isBadRequest());
         assertPermission("page", BenefitQuery.class);
         assertPermission("getById", long.class);
+    }
+
+    @Test void rejectsUnsafeBenefitDateBoundsBeforeServiceExecution() throws Exception {
+        mockMvc.perform(get("/api/benefits").param("endDate", LocalDate.MAX.toString()))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/benefits").param("endDate", "9999-12-31"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/benefits").param("startDate", "2026-08-02").param("endDate", "2026-08-01"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/benefits").param("endDate", "9999-12-30"))
+                .andExpect(status().isOk());
     }
 
     @Test void rejectsAnonymousAndCallerWithoutBenefitRead() throws Exception {

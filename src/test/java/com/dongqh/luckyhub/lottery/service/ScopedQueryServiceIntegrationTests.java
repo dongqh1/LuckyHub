@@ -23,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.UUID;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,6 +51,7 @@ class ScopedQueryServiceIntegrationTests {
         lotteryQueries = new LotteryQueryServiceImpl(activityMapper, orderMapper, recordMapper, benefitMapper, dataScope);
         benefitQueries = new BenefitQueryServiceImpl(benefitMapper, recordMapper, dataScope);
         LoginContext.set(new LoginPrincipal(SELF, "task14", "session"));
+        deleteFixedTestUsers();
         seed(SELF, marker + "-self", 1);
         seed(OTHER, marker + "-other", 2);
     }
@@ -57,9 +59,13 @@ class ScopedQueryServiceIntegrationTests {
     @AfterEach
     void cleanUp() {
         LoginContext.clear();
-        jdbc.update("DELETE b FROM user_benefit b JOIN lottery_draw_record r ON r.id=b.draw_record_id WHERE r.request_id LIKE ?", marker + "%");
-        jdbc.update("DELETE FROM lottery_draw_record WHERE request_id LIKE ?", marker + "%");
-        jdbc.update("DELETE FROM lottery_draw_order WHERE request_id LIKE ?", marker + "%");
+        deleteFixedTestUsers();
+    }
+
+    private void deleteFixedTestUsers() {
+        jdbc.update("DELETE b FROM user_benefit b JOIN lottery_draw_record r ON r.id=b.draw_record_id WHERE r.user_id IN (?,?)", SELF, OTHER);
+        jdbc.update("DELETE FROM lottery_draw_record WHERE user_id IN (?,?)", SELF, OTHER);
+        jdbc.update("DELETE FROM lottery_draw_order WHERE user_id IN (?,?)", SELF, OTHER);
     }
 
     @Test
@@ -110,6 +116,30 @@ class ScopedQueryServiceIntegrationTests {
 
         assertThatThrownBy(() -> lotteryQueries.getDraw(marker + "-other")).isInstanceOf(ForbiddenException.class);
         assertThatThrownBy(() -> benefitQueries.getById(foreignBenefitId)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void directServiceCallsDefensivelyRejectUnsafeDatesAndPagesButAcceptSafeMysqlBoundary() {
+        when(dataScope.resolveUserScope(null, PermissionCodes.LOTTERY_RECORD_READ_ALL)).thenReturn(UserDataScope.one(SELF));
+        when(dataScope.resolveUserScope(null, PermissionCodes.BENEFIT_READ_ALL)).thenReturn(UserDataScope.one(SELF));
+        when(dataScope.resolveUserScope(null, PermissionCodes.LOTTERY_ORDER_READ_ALL)).thenReturn(UserDataScope.one(SELF));
+        DrawRecordQuery unsafeRecord = new DrawRecordQuery();
+        unsafeRecord.setEndDate(LocalDate.of(9999, 12, 31));
+        BenefitQuery unsafeBenefit = new BenefitQuery();
+        unsafeBenefit.setEndDate(LocalDate.MAX);
+        DrawOrderQuery unsafeOrder = new DrawOrderQuery();
+        unsafeOrder.setPage(Long.MAX_VALUE);
+
+        assertThatThrownBy(() -> lotteryQueries.pageRecords(unsafeRecord))
+                .isInstanceOf(com.dongqh.luckyhub.common.exception.BusinessException.class);
+        assertThatThrownBy(() -> benefitQueries.page(unsafeBenefit))
+                .isInstanceOf(com.dongqh.luckyhub.common.exception.BusinessException.class);
+        assertThatThrownBy(() -> lotteryQueries.pageOrders(unsafeOrder))
+                .isInstanceOf(com.dongqh.luckyhub.common.exception.BusinessException.class);
+
+        DrawRecordQuery safeBoundary = new DrawRecordQuery();
+        safeBoundary.setEndDate(LocalDate.of(9999, 12, 30));
+        assertThat(lotteryQueries.pageRecords(safeBoundary).records()).hasSize(1);
     }
 
     private void seed(long userId, String requestId, int suffix) {
