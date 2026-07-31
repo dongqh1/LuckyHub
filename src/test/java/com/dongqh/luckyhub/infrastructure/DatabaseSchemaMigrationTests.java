@@ -42,7 +42,9 @@ class DatabaseSchemaMigrationTests {
             "marketing_activity_prize",
             "lottery_draw_order",
             "lottery_draw_record",
-            "user_benefit"
+            "user_benefit",
+            "message_outbox",
+            "message_consume_record"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -53,7 +55,10 @@ class DatabaseSchemaMigrationTests {
             "sys_role_permission:role_id,permission_id",
             "marketing_activity_prize:activity_id,prize_id",
             "lottery_draw_order:request_id",
-            "lottery_draw_record:request_id,sequence_no"
+            "lottery_draw_record:request_id,sequence_no",
+            "user_benefit:draw_record_id",
+            "message_outbox:event_id",
+            "message_consume_record:event_id,consumer_name"
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -82,6 +87,18 @@ class DatabaseSchemaMigrationTests {
                 SELECT COUNT(*)
                 FROM flyway_schema_history
                 WHERE version = '1'
+                  AND success = 1
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isEqualTo(1);
+    }
+
+    @Test
+    void recordsSuccessfulVersionFiveMigration() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM flyway_schema_history
+                WHERE version = '5'
                   AND success = 1
                 """, Integer.class);
 
