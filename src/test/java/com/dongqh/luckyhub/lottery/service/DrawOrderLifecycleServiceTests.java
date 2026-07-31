@@ -4,7 +4,9 @@ import com.dongqh.luckyhub.common.exception.BusinessException;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawOrder;
 import com.dongqh.luckyhub.lottery.enums.DrawOrderStatus;
 import com.dongqh.luckyhub.lottery.enums.LotteryErrorCode;
+import com.dongqh.luckyhub.lottery.mapper.LotteryDrawOrderMapper;
 import com.dongqh.luckyhub.lottery.model.NewDrawOrder;
+import com.dongqh.luckyhub.lottery.service.impl.DrawOrderLifecycleServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,9 +19,19 @@ import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 
 @SpringBootTest
 class DrawOrderLifecycleServiceTests {
@@ -28,6 +40,8 @@ class DrawOrderLifecycleServiceTests {
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
     private final Set<String> requestIds = new LinkedHashSet<>();
+    @Autowired
+    private LotteryDrawOrderMapper orderMapper;
 
     @Autowired
     DrawOrderLifecycleServiceTests(
@@ -70,6 +84,53 @@ class DrawOrderLifecycleServiceTests {
         assertThat(duplicate.getId()).isEqualTo(first.getId());
         assertThat(count(command.requestId())).isOne();
         assertThat(duplicate.getDrawDate()).isEqualTo(command.drawDate());
+    }
+
+    @Test
+    void concurrentCreatorsReturnTheSameOrderAfterTheFirstTransactionEstablishedAnOldSnapshot()
+            throws Exception {
+        NewDrawOrder command = command(20L, 120L, 1);
+        CountDownLatch firstOldRead = new CountDownLatch(1);
+        CountDownLatch allowFirstToInsert = new CountDownLatch(1);
+        AtomicReference<Thread> firstThread = new AtomicReference<>();
+        AtomicInteger firstThreadReads = new AtomicInteger();
+        LotteryDrawOrderMapper controlledMapper = mock(
+                LotteryDrawOrderMapper.class, delegatesTo(orderMapper));
+        DrawOrderLifecycleService controlledService =
+                new DrawOrderLifecycleServiceImpl(controlledMapper);
+
+        doAnswer(invocation -> {
+            Object result = orderMapper.selectByRequestId(invocation.getArgument(0));
+            if (Thread.currentThread() == firstThread.get()
+                    && firstThreadReads.incrementAndGet() == 1) {
+                assertThat(result).isNull();
+                firstOldRead.countDown();
+                assertThat(allowFirstToInsert.await(5, TimeUnit.SECONDS)).isTrue();
+            }
+            return result;
+        }).when(controlledMapper).selectByRequestId(command.requestId());
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<LotteryDrawOrder> oldSnapshotCreator = executor.submit(() -> {
+                firstThread.set(Thread.currentThread());
+                return transactionTemplate.execute(status -> controlledService.createProcessing(command));
+            });
+            assertThat(firstOldRead.await(5, TimeUnit.SECONDS)).isTrue();
+
+            Future<LotteryDrawOrder> winningCreator = executor.submit(
+                    () -> transactionTemplate.execute(status -> controlledService.createProcessing(command)));
+            LotteryDrawOrder committed = winningCreator.get(5, TimeUnit.SECONDS);
+            allowFirstToInsert.countDown();
+            LotteryDrawOrder concurrent = oldSnapshotCreator.get(5, TimeUnit.SECONDS);
+
+            assertThat(concurrent.getId()).isEqualTo(committed.getId());
+            assertThat(count(command.requestId())).isOne();
+        } finally {
+            allowFirstToInsert.countDown();
+            executor.shutdownNow();
+            assertThat(executor.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     @Test

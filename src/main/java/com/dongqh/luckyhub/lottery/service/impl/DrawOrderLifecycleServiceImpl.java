@@ -44,7 +44,10 @@ public class DrawOrderLifecycleServiceImpl implements DrawOrderLifecycleService 
         order.setStatus(DrawOrderStatus.PROCESSING);
         orderMapper.insertProcessingIfAbsent(order);
 
-        LotteryDrawOrder persisted = orderMapper.selectByRequestId(command.requestId());
+        // A locking read is a current read under InnoDB REPEATABLE READ. The first
+        // plain SELECT may have established a snapshot before a concurrent creator
+        // committed, so another plain SELECT could incorrectly keep returning null.
+        LotteryDrawOrder persisted = orderMapper.selectByRequestIdForUpdate(command.requestId());
         validateIdentity(persisted, command);
         return persisted;
     }

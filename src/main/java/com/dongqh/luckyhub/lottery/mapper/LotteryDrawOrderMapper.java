@@ -22,6 +22,9 @@ public interface LotteryDrawOrderMapper extends BaseMapper<LotteryDrawOrder> {
     @Select("SELECT * FROM lottery_draw_order WHERE request_id = #{requestId}")
     LotteryDrawOrder selectByRequestId(@Param("requestId") String requestId);
 
+    @Select("SELECT * FROM lottery_draw_order WHERE request_id = #{requestId} FOR UPDATE")
+    LotteryDrawOrder selectByRequestIdForUpdate(@Param("requestId") String requestId);
+
     @Update("""
             UPDATE lottery_draw_order
             SET status = 'SUCCESS', fail_reason = NULL, completed_at = #{completedAt}
