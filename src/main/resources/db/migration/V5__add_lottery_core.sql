@@ -1,3 +1,18 @@
+CREATE TABLE IF NOT EXISTS lottery_v5_user_benefit_guard (
+    guard_id TINYINT UNSIGNED NOT NULL,
+    legacy_benefit_count BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (guard_id),
+    CONSTRAINT chk_v5_requires_empty_user_benefit CHECK (legacy_benefit_count = 0)
+) ENGINE=InnoDB COMMENT='V5迁移前置守卫：历史权益必须为空';
+
+DELETE FROM lottery_v5_user_benefit_guard;
+
+INSERT INTO lottery_v5_user_benefit_guard (guard_id, legacy_benefit_count)
+SELECT 1, COUNT(*)
+FROM user_benefit;
+
+DROP TABLE lottery_v5_user_benefit_guard;
+
 ALTER TABLE marketing_activity
     ADD COLUMN no_win_weight INT UNSIGNED NOT NULL DEFAULT 0
         COMMENT '独立未中奖权重' AFTER daily_limit;
