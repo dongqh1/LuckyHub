@@ -40,5 +40,12 @@ OSS 图片上传的完整调用链、源码解析和排错案例见
 活动状态定时任务从应用启动、Spring 调度、事务到 MySQL 批量更新的详细执行流程见
 [`docs/LuckyHub-活动状态定时任务实现详解.md`](docs/LuckyHub-活动状态定时任务实现详解.md)。
 
+抽奖与权益的七个接口、权限、请求响应、错误码和 Postman 示例见
+[`docs/lottery-api.md`](docs/lottery-api.md)。
+
+从 `POST /api/lottery/draws` 开始，逐层讲解 JWT、幂等、Redis Lua、分布式锁、
+MySQL 原子库存、事务、Outbox、Redis Stream、权益履约和超时对账的教学文档见
+[`docs/LuckyHub-抽奖核心流程实现详解.md`](docs/LuckyHub-抽奖核心流程实现详解.md)。
+
 当前开发进度、已完成模块和下一步任务见
 [`docs/LuckyHub-开发进度交接总结.md`](docs/LuckyHub-开发进度交接总结.md)。
