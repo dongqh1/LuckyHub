@@ -80,6 +80,7 @@ class LotteryPersistenceContractTests {
         assertField(MessageOutbox.class, "payload", String.class);
         assertField(MessageOutbox.class, "status", OutboxStatus.class);
         assertField(MessageOutbox.class, "retryCount", Integer.class);
+        assertField(MessageOutbox.class, "lastError", String.class);
         assertField(MessageOutbox.class, "nextRetryAt", LocalDateTime.class);
         assertField(MessageOutbox.class, "createdAt", LocalDateTime.class);
         assertField(MessageOutbox.class, "sentAt", LocalDateTime.class);

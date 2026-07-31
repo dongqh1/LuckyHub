@@ -28,6 +28,7 @@ public class MessageOutbox {
     private String payload;
     private OutboxStatus status;
     private Integer retryCount;
+    private String lastError;
     private LocalDateTime nextRetryAt;
 
     @TableField(fill = FieldFill.INSERT)

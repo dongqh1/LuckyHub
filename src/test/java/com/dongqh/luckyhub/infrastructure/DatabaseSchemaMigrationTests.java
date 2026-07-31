@@ -106,6 +106,26 @@ class DatabaseSchemaMigrationTests {
     }
 
     @Test
+    void addsOutboxDeliveryErrorThroughVersionSixMigration() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM flyway_schema_history
+                WHERE version = '6'
+                  AND success = 1
+                """, Integer.class);
+        Integer lastErrorColumn = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'message_outbox'
+                  AND column_name = 'last_error'
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isEqualTo(1);
+        assertThat(lastErrorColumn).isEqualTo(1);
+    }
+
+    @Test
     void seedsPrizePermissionsAndGrantsThemToAdmin() {
         Integer successfulMigration = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)

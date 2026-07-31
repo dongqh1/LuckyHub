@@ -48,6 +48,9 @@ luckyhub:
     provider: redis-stream
     lottery-stream: luckyhub:stream:lottery
     lottery-group: luckyhub-lottery-consumers
+    logical-consumer-name: lottery-core
+    consumer-batch-size: 20
+    consumer-poll-interval: 1s
   activity:
     status-refresh-interval: ${ACTIVITY_STATUS_REFRESH_INTERVAL:30000}
     status-refresh-initial-delay: ${ACTIVITY_STATUS_REFRESH_INITIAL_DELAY:0}
