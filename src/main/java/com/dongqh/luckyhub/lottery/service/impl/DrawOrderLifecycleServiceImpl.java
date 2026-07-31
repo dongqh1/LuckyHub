@@ -6,12 +6,18 @@ import com.dongqh.luckyhub.lottery.enums.DrawOrderStatus;
 import com.dongqh.luckyhub.lottery.enums.LotteryErrorCode;
 import com.dongqh.luckyhub.lottery.mapper.LotteryDrawOrderMapper;
 import com.dongqh.luckyhub.lottery.model.NewDrawOrder;
+import com.dongqh.luckyhub.lottery.messaging.event.DrawEventEnvelope;
+import com.dongqh.luckyhub.lottery.messaging.event.DrawEventType;
+import com.dongqh.luckyhub.lottery.messaging.event.DrawReleaseRequestedEvent;
 import com.dongqh.luckyhub.lottery.service.DrawOrderLifecycleService;
+import com.dongqh.luckyhub.lottery.service.OutboxService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class DrawOrderLifecycleServiceImpl implements DrawOrderLifecycleService {
@@ -20,9 +26,15 @@ public class DrawOrderLifecycleServiceImpl implements DrawOrderLifecycleService 
     private static final String DEFAULT_SAFE_REASON = "DRAW_TRANSACTION_FAILED";
 
     private final LotteryDrawOrderMapper orderMapper;
+    private final OutboxService outboxService;
+    private final ObjectMapper objectMapper;
 
-    public DrawOrderLifecycleServiceImpl(LotteryDrawOrderMapper orderMapper) {
+    public DrawOrderLifecycleServiceImpl(LotteryDrawOrderMapper orderMapper,
+                                         OutboxService outboxService,
+                                         ObjectMapper objectMapper) {
         this.orderMapper = orderMapper;
+        this.outboxService = outboxService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -59,6 +71,23 @@ public class DrawOrderLifecycleServiceImpl implements DrawOrderLifecycleService 
             throw new IllegalArgumentException("orderId must be positive");
         }
         orderMapper.markFailedIfProcessing(orderId, normalizeReason(safeReason));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void markFailedAndRequestRelease(LotteryDrawOrder order, String safeReason,
+                                            LocalDateTime occurredAt) {
+        Objects.requireNonNull(order, "order must not be null");
+        Objects.requireNonNull(occurredAt, "occurredAt must not be null");
+        String reason = normalizeReason(safeReason);
+        if (orderMapper.markFailedIfProcessing(order.getId(), reason) != 1) {
+            return;
+        }
+        outboxService.append(DrawEventEnvelope.create(
+                DrawEventType.DRAW_RELEASE_REQUESTED, order.getRequestId(), order.getUserId(),
+                order.getActivityId(), order.getId(), occurredAt,
+                new DrawReleaseRequestedEvent(order.getDrawCount(), order.getDrawDate(), reason),
+                objectMapper));
     }
 
     private void validateIdentity(LotteryDrawOrder order, NewDrawOrder command) {

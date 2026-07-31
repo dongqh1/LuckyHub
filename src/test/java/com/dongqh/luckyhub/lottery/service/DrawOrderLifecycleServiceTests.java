@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.util.LinkedHashSet;
@@ -56,6 +57,9 @@ class DrawOrderLifecycleServiceTests {
     @AfterEach
     void cleanUpExactRows() {
         requestIds.forEach(id -> jdbcTemplate.update(
+                "DELETE FROM message_outbox WHERE aggregate_id IN "
+                        + "(SELECT CAST(id AS CHAR) FROM lottery_draw_order WHERE request_id = ?)", id));
+        requestIds.forEach(id -> jdbcTemplate.update(
                 "DELETE FROM lottery_draw_order WHERE request_id = ?", id));
         requestIds.clear();
     }
@@ -97,7 +101,8 @@ class DrawOrderLifecycleServiceTests {
         LotteryDrawOrderMapper controlledMapper = mock(
                 LotteryDrawOrderMapper.class, delegatesTo(orderMapper));
         DrawOrderLifecycleService controlledService =
-                new DrawOrderLifecycleServiceImpl(controlledMapper);
+                new DrawOrderLifecycleServiceImpl(
+                        controlledMapper, mock(OutboxService.class), new ObjectMapper());
 
         doAnswer(invocation -> {
             Object result = orderMapper.selectByRequestId(invocation.getArgument(0));
@@ -159,6 +164,24 @@ class DrawOrderLifecycleServiceTests {
 
         assertThat(orderState(success.getId()).status()).isEqualTo(DrawOrderStatus.SUCCESS.name());
         assertThat(orderState(success.getId()).reason()).isNull();
+    }
+
+    @Test
+    void failureTransitionAndReleaseOutboxCommitTogetherInRequiresNewTransaction() {
+        LotteryDrawOrder processing = service.createProcessing(command(6L, 16L, 10));
+        java.time.LocalDateTime occurredAt = java.time.LocalDateTime.of(2026, 7, 31, 14, 0);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            service.markFailedAndRequestRelease(processing, "DRAW_TRANSACTION_FAILED", occurredAt);
+            status.setRollbackOnly();
+        });
+
+        assertThat(orderState(processing.getId()).status()).isEqualTo(DrawOrderStatus.FAILED.name());
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM message_outbox
+                WHERE aggregate_id = ? AND event_type = 'DRAW_RELEASE_REQUESTED'
+                  AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.payload.drawCount')) = '10'
+                """, Integer.class, Long.toString(processing.getId()))).isOne();
     }
 
     private NewDrawOrder command(long userId, long activityId, int drawCount) {

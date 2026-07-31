@@ -33,6 +33,9 @@ public class LotteryDrawRecord {
     private String prizeImageUrl;
     private LocalDateTime drawTime;
 
+    @TableField(exist = false)
+    private Long benefitId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }
