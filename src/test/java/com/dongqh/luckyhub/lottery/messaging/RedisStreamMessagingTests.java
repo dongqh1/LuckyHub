@@ -1,6 +1,7 @@
 package com.dongqh.luckyhub.lottery.messaging;
 
 import com.dongqh.luckyhub.lottery.config.MessagingProperties;
+import com.dongqh.luckyhub.benefit.enums.BenefitStatus;
 import com.dongqh.luckyhub.lottery.entity.MessageOutbox;
 import com.dongqh.luckyhub.lottery.enums.OutboxStatus;
 import com.dongqh.luckyhub.lottery.mapper.MessageOutboxMapper;
@@ -27,6 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -53,12 +55,14 @@ class RedisStreamMessagingTests {
     @Autowired MessageConsumeRecordMapper consumeRecordMapper;
     @Autowired MessageConsumeService consumeService;
     @Autowired DrawQuotaService quotaService;
+    @Autowired JdbcTemplate jdbcTemplate;
 
     private final Set<String> streams = new java.util.HashSet<>();
     private final Set<String> eventIds = new java.util.HashSet<>();
     private final Set<String> quotaKeys = new java.util.HashSet<>();
     private final Set<String> reservationKeys = new java.util.HashSet<>();
     private final Set<String> reservationIds = new java.util.HashSet<>();
+    private final Set<Long> benefitIds = new java.util.HashSet<>();
 
     @AfterEach
     void cleanExactRowsAndStreams() {
@@ -68,6 +72,7 @@ class RedisStreamMessagingTests {
         eventIds.forEach(id -> consumeRecordMapper.delete(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord>()
                         .eq(com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord::getEventId, id)));
+        benefitIds.forEach(id -> jdbcTemplate.update("DELETE FROM user_benefit WHERE id = ?", id));
         redisTemplate.delete(streams);
         redisTemplate.delete(quotaKeys);
         redisTemplate.delete(reservationKeys);
@@ -75,6 +80,50 @@ class RedisStreamMessagingTests {
             redisTemplate.opsForZSet().remove(
                     DrawQuotaKeys.reservationTimeouts(), reservationIds.toArray());
         }
+    }
+
+    @Test
+    void fulfillmentEventChangesBenefitAndIsAcknowledgedOnlyAfterMysqlCommit() {
+        String stream = "task12:stream:" + UUID.randomUUID();
+        String group = "task12-group-" + UUID.randomUUID();
+        streams.add(stream);
+        MessagingProperties properties = properties(stream, group);
+        RedisStreamInitializer initializer = new RedisStreamInitializer(redisTemplate, properties);
+        RedisStreamDrawEventPublisher publisher =
+                new RedisStreamDrawEventPublisher(redisTemplate, objectMapper, properties);
+        RedisStreamDrawEventConsumer consumer =
+                new RedisStreamDrawEventConsumer(redisTemplate, objectMapper, consumeService, properties);
+        initializer.initialize();
+
+        long drawRecordId = positiveRandomLong();
+        jdbcTemplate.update("""
+                INSERT INTO user_benefit
+                    (draw_record_id, user_id, prize_id, prize_type, quantity, status, obtained_at)
+                VALUES (?, ?, ?, 'PHYSICAL', 1, 'PENDING', CURRENT_TIMESTAMP(3))
+                """, drawRecordId, positiveRandomLong(), positiveRandomLong());
+        long benefitId = jdbcTemplate.queryForObject(
+                "SELECT id FROM user_benefit WHERE draw_record_id = ?", Long.class, drawRecordId);
+        benefitIds.add(benefitId);
+        DrawEventEnvelope event = new DrawEventEnvelope(
+                UUID.randomUUID(), DrawEventType.PRIZE_FULFILLMENT_REQUESTED, 1,
+                "task12-benefit-" + UUID.randomUUID(), positiveRandomLong(), positiveRandomLong(),
+                positiveRandomLong(), LocalDateTime.now(), objectMapper.valueToTree(
+                        new PrizeFulfillmentRequestedEvent(
+                                benefitId, drawRecordId, positiveRandomLong(), PrizeType.PHYSICAL)));
+        eventIds.add(event.eventId().toString());
+
+        publisher.publish(event);
+
+        assertThat(consumer.pollOnce()).isOne();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT status FROM user_benefit WHERE id = ?", String.class, benefitId))
+                .isEqualTo(BenefitStatus.CLAIM_PENDING.name());
+        assertThat(consumeRecordMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord>()
+                        .eq(com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord::getEventId,
+                                event.eventId().toString())))
+                .isOne();
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isZero();
     }
 
     @Test

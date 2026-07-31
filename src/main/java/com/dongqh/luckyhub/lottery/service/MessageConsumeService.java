@@ -1,12 +1,14 @@
 package com.dongqh.luckyhub.lottery.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.dongqh.luckyhub.benefit.service.BenefitFulfillmentService;
 import com.dongqh.luckyhub.lottery.config.MessagingProperties;
 import com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord;
 import com.dongqh.luckyhub.lottery.mapper.MessageConsumeRecordMapper;
 import com.dongqh.luckyhub.lottery.messaging.event.DrawConfirmedEvent;
 import com.dongqh.luckyhub.lottery.messaging.event.DrawEventEnvelope;
 import com.dongqh.luckyhub.lottery.messaging.event.DrawReleaseRequestedEvent;
+import com.dongqh.luckyhub.lottery.messaging.event.PrizeFulfillmentRequestedEvent;
 import com.dongqh.luckyhub.lottery.quota.DrawQuotaService;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ public class MessageConsumeService {
 
     private final MessageConsumeRecordMapper consumeRecordMapper;
     private final DrawQuotaService quotaService;
+    private final BenefitFulfillmentService benefitFulfillmentService;
     private final ObjectMapper objectMapper;
     private final String logicalConsumerName;
     private final TransactionTemplate transactionTemplate;
@@ -28,11 +31,13 @@ public class MessageConsumeService {
     public MessageConsumeService(
             MessageConsumeRecordMapper consumeRecordMapper,
             DrawQuotaService quotaService,
+            BenefitFulfillmentService benefitFulfillmentService,
             ObjectMapper objectMapper,
             MessagingProperties properties,
             PlatformTransactionManager transactionManager) {
         this.consumeRecordMapper = consumeRecordMapper;
         this.quotaService = quotaService;
+        this.benefitFulfillmentService = benefitFulfillmentService;
         this.objectMapper = objectMapper;
         this.logicalConsumerName = properties.logicalConsumerName();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -58,8 +63,12 @@ public class MessageConsumeService {
                 event.payloadAs(DrawReleaseRequestedEvent.class, objectMapper);
                 quotaService.release(event.requestId());
             }
-            case PRIZE_FULFILLMENT_REQUESTED -> throw new UnsupportedOperationException(
-                    "Prize fulfillment is connected by Task 12 and must remain pending until then");
+            case PRIZE_FULFILLMENT_REQUESTED -> {
+                var payload = event.payloadAs(
+                        PrizeFulfillmentRequestedEvent.class, objectMapper);
+                benefitFulfillmentService.fulfill(payload.benefitId(), eventId);
+                return;
+            }
         }
 
         try {
