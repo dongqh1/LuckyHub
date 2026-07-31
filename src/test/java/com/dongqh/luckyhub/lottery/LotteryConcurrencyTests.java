@@ -23,6 +23,7 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -40,7 +41,8 @@ import static org.mockito.Mockito.when;
         "spring.task.scheduling.enabled=false",
         "luckyhub.lottery.reconcile-initial-delay=24h",
         "luckyhub.messaging.consumer-initial-delay=24h",
-        "luckyhub.lottery.outbox-initial-delay=24h"
+        "luckyhub.lottery.outbox-initial-delay=24h",
+        "luckyhub.activity.status-refresh-initial-delay=86400000"
 })
 class LotteryConcurrencyTests {
 
@@ -55,7 +57,6 @@ class LotteryConcurrencyTests {
     private final List<String> requestIds = new ArrayList<>();
     private final List<Long> activityIds = new ArrayList<>();
     private final List<Long> prizeIds = new ArrayList<>();
-    private final List<Long> quotaUsers = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -67,6 +68,7 @@ class LotteryConcurrencyTests {
     void cleanExactRowsAndKeys() {
         LoginContext.clear();
         for (String requestId : requestIds) {
+            deleteQuotaForReservation(requestId);
             List<String> eventIds = jdbc.queryForList(
                     "SELECT event_id FROM message_outbox WHERE payload ->> '$.requestId'=?", String.class, requestId);
             eventIds.forEach(eventId -> jdbc.update("DELETE FROM message_consume_record WHERE event_id=?", eventId));
@@ -77,9 +79,7 @@ class LotteryConcurrencyTests {
             redis.delete(DrawQuotaKeys.reservation(requestId));
             redis.opsForZSet().remove(DrawQuotaKeys.reservationTimeouts(), requestId);
         }
-        LocalDate today = LocalDate.now(SHANGHAI);
         for (long activityId : activityIds) {
-            for (long userId : quotaUsers) redis.delete(DrawQuotaKeys.quota(activityId, userId, today));
             jdbc.update("DELETE FROM marketing_activity_prize WHERE activity_id=?", activityId);
             jdbc.update("DELETE FROM marketing_activity WHERE id=?", activityId);
         }
@@ -90,7 +90,6 @@ class LotteryConcurrencyTests {
     void concurrentUniqueRequestsNeverExceedDailyLimitAndEverySuccessHasOneRecord() throws Exception {
         long activityId = activity(100, 17);
         long userId = BASE_USER + 1;
-        quotaUsers.add(userId);
         AtomicInteger success = new AtomicInteger();
         AtomicInteger quotaRejected = new AtomicInteger();
         CountDownLatch ready = new CountDownLatch(40);
@@ -125,6 +124,7 @@ class LotteryConcurrencyTests {
         } finally {
             start.countDown();
             pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
 
         assertThat(success).hasValue(17);
@@ -144,7 +144,6 @@ class LotteryConcurrencyTests {
     void concurrentSameRequestCreatesOneOrderConsumesOnceAndEventuallyReturnsExactTen() throws Exception {
         long activityId = activity(100, 100);
         long userId = BASE_USER + 2;
-        quotaUsers.add(userId);
         String requestId = requestId();
         CountDownLatch ready = new CountDownLatch(16);
         CountDownLatch start = new CountDownLatch(1);
@@ -172,6 +171,7 @@ class LotteryConcurrencyTests {
         } finally {
             start.countDown();
             pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
 
         LoginContext.set(new LoginPrincipal(userId, "same-user", "same-session"));
@@ -194,7 +194,6 @@ class LotteryConcurrencyTests {
         try {
             for (int i = 0; i < calls; i++) {
                 long userId = BASE_USER + 100 + i;
-                quotaUsers.add(userId);
                 String requestId = requestId();
                 futures.add(pool.submit(() -> {
                     ready.countDown();
@@ -214,6 +213,7 @@ class LotteryConcurrencyTests {
         } finally {
             start.countDown();
             pool.shutdownNow();
+            assertThat(pool.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
         }
 
         assertThat(jdbc.queryForObject("SELECT remaining_stock FROM marketing_activity_prize WHERE id=?",
@@ -278,6 +278,17 @@ class LotteryConcurrencyTests {
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(error);
+        }
+    }
+
+    private void deleteQuotaForReservation(String requestId) {
+        List<Object> identity = redis.opsForHash().multiGet(
+                DrawQuotaKeys.reservation(requestId), List.of("activityId", "userId", "drawDate"));
+        if (identity.size() == 3 && identity.stream().noneMatch(java.util.Objects::isNull)) {
+            long activityId = Long.parseLong(identity.get(0).toString());
+            long userId = Long.parseLong(identity.get(1).toString());
+            LocalDate drawDate = LocalDate.parse(identity.get(2).toString(), DateTimeFormatter.BASIC_ISO_DATE);
+            redis.delete(DrawQuotaKeys.quota(activityId, userId, drawDate));
         }
     }
 
