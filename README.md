@@ -47,5 +47,9 @@ OSS 图片上传的完整调用链、源码解析和排错案例见
 MySQL 原子库存、事务、Outbox、Redis Stream、权益履约和超时对账的教学文档见
 [`docs/LuckyHub-抽奖核心流程实现详解.md`](docs/LuckyHub-抽奖核心流程实现详解.md)。
 
+围绕 `eligibilityService.load(activityId)`，按照执行流程详细讲解抽奖资格配置快照、
+Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档见
+[`docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md`](docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md)。
+
 当前开发进度、已完成模块和下一步任务见
 [`docs/LuckyHub-开发进度交接总结.md`](docs/LuckyHub-开发进度交接总结.md)。
