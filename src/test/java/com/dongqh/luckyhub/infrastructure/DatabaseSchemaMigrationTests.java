@@ -54,7 +54,15 @@ class DatabaseSchemaMigrationTests {
             "inventory_ledger",
             "points_account",
             "points_ledger",
-            "points_redemption_order"
+            "points_redemption_order",
+            "coupon_template",
+            "user_coupon",
+            "coupon_issue_record",
+            "membership_product",
+            "user_membership",
+            "membership_grant_record",
+            "mall_order",
+            "payment_order"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -77,7 +85,15 @@ class DatabaseSchemaMigrationTests {
             "points_ledger:business_type,business_id",
             "points_ledger:reversal_of_ledger_id",
             "points_redemption_order:redemption_no",
-            "points_redemption_order:reversal_no"
+            "points_redemption_order:reversal_no",
+            "coupon_template:template_code",
+            "user_coupon:coupon_no",
+            "coupon_issue_record:business_no",
+            "membership_product:product_code",
+            "user_membership:user_id",
+            "membership_grant_record:business_no",
+            "mall_order:order_no",
+            "payment_order:payment_no"
     );
 
     private final JdbcTemplate jdbcTemplate;

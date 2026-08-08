@@ -6,11 +6,11 @@
 >
 > 项目目录：`E:\ANotes\software\luckyhub`
 
-🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1/2（截至 2026-08-08）
+🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1/2/3（截至 2026-08-08）
 
-Progress：抽奖核心保持可用；阶段 1 已完成商品/SKU、统一奖励与渠道库存；阶段 2 已完成积分账户、不可变流水、POINTS 单 SKU 兑换、冲正、7 个 API 和 V10。阶段 2 聚焦测试 44/44、空库迁移测试 17/17、全量回归 312/312 通过。
+Progress：抽奖核心保持可用；阶段 1 已完成商品与渠道库存；阶段 2 已完成积分账户与积分兑换；阶段 3 已完成优惠券、会员、现金订单、模拟支付、V11～V13 和商业 API。下一步是阶段 4 统一异步履约底座与可替换模拟 Gateway。
 
-Plans：阶段 1/2 必做任务为零。下一步仅编写和确认阶段 3“优惠券、会员与现金订单”实施计划；尚未开始阶段 3 代码。
+Plans：阶段 1/2/3 必做任务为零。下一步仅编写和确认阶段 4 实施计划；尚未开始阶段 4 代码。
 
 Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpowers`/`.codex-progress` 过程文件，未提交、不影响运行。
 
@@ -24,7 +24,7 @@ Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpo
 请先读取 docs/LuckyHub-开发进度交接总结.md，
 再执行 git status --short 和 git log -5 --oneline，
 然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 2 已完成计划，
-根据真实接口编写阶段 3 详细计划；计划确认前不直接写阶段 3 代码。
+根据真实接口编写阶段 4 详细计划；计划确认前不直接写阶段 4 代码。
 ```
 
 最小检查命令：
@@ -55,6 +55,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 - 抽奖核心基线：`03c242b docs: finalize lottery specification`
 - 阶段 1 功能基线：`90257bb feat: expose channel inventory API`
 - 阶段 2 功能基线：`69dff03 feat: expose points redemption API`
+- 阶段 3 安全基线：`4c44564 test: prove phase three commerce safety`
 - 当前远程同步状态：本阶段未执行推送，使用恢复检查命令确认
 - tracked 工作区：阶段 2 交接提交后应为干净
 - Docker MySQL/Redis：最终验收时已启动并健康
@@ -62,7 +63,21 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 - Spring Boot：4.1.0
 - MySQL：8.4
 - Redis：配额、预占、Redisson 锁、Stream 消息
-- Flyway：V1–V10 全部通过校验
+- Flyway：V1–V13 全部通过校验
+
+阶段 3 最终验收证据：
+
+```text
+临时空库 V1->V13：3/3 通过，临时授权与数据库已清理
+阶段 3 聚焦测试：24/24 通过
+全量回归：336/336 通过
+Failures: 0
+Errors: 0
+打包：BUILD SUCCESS
+JAR：69,561,901 字节
+OpenAPI JAR 冒烟：5 个关键路径通过
+审查：Critical 0，Important 0
+```
 
 阶段 2 最终验收证据：
 
@@ -300,6 +315,14 @@ POST /api/admin/points/redemptions/{redemptionNo}/reverse
 
 ---
 
+### 3.10 迷你商城阶段 3：优惠券、会员与现金订单
+
+已完成优惠券模板/券包及锁定、核销、释放、过期；月卡、季卡、年卡和续费顺延；单 SKU 现金订单、完整价格快照；会员先折扣、优惠券后抵扣；模拟支付创建、签名回调、主动取消和 30 分钟超时释放。
+
+新增 9 项权限和 13 个 HTTP 接口，详见 `docs/coupon-membership-order-api.md`。金额使用整数分，支付成功时订单、库存、优惠券和支付单在同一事务落账。并发验证覆盖同订单重试、同券争抢、重复支付回调和会员续费。
+
+阶段 3 边界：模拟支付只用于本地；没有购物车、退款、地址、物流和真实外部 Gateway；抽奖权益 handler 尚未迁移到这些领域服务。
+
 ## 4. 数据库迁移
 
 已有 V1–V4 保留原基础、奖品和活动模块。
@@ -334,7 +357,13 @@ POST /api/admin/points/redemptions/{redemptionNo}/reverse
   - `REVERSED/RETURN` 库存反向状态与流水操作；
   - `points:read/redeem/adjust` 权限及角色分配。
 
-不要修改已发布的 V1–V10；后续数据库变更新建 V11。
+阶段 3 新迁移：
+
+- `V11__add_coupon_assets.sql`：优惠券模板、用户券包、发放幂等记录；
+- `V12__add_membership_assets.sql`：会员产品、用户会员、不可变发放记录；
+- `V13__add_cash_order_and_payment.sql`：商城订单、模拟支付单和 9 项权限。
+
+不要修改已发布的 V1–V13；后续数据库变更新建 V14。
 
 ---
 
@@ -559,7 +588,7 @@ docs/activity-management-api.md
 
 ## 11. 下一阶段与抽奖可选任务
 
-### 当前唯一主线：规划阶段 3 优惠券、会员与现金订单
+### 当前唯一主线：规划阶段 4 统一异步履约底座
 
 阶段 2 已完成计划与接口：
 
@@ -568,16 +597,16 @@ docs/superpowers/plans/2026-08-08-points-account-redemption.md
 docs/points-redemption-api.md
 ```
 
-阶段 3 规划应覆盖：
+阶段 4 规划应覆盖：
 
-1. 优惠券模板、用户券包、锁定/核销/释放/过期；
-2. 月卡、季卡、年卡及有效期顺延；
-3. 单 SKU 现金订单和价格快照；
-4. 商品原价 → 会员折扣 → 优惠券 → 应付金额；
-5. 模拟支付、幂等回调、取消和超时释放；
-6. 与现有 `MALL` 库存和用户权限的原子协调。
+1. `fulfillment_task`、尝试记录、隔离记录和稳定履约号；
+2. `CouponGateway`、`PointsGateway`、`MembershipGateway`、`LogisticsGateway`；
+3. 四套幂等本地模拟供应方；
+4. 事务外调用、超时、重试、指数退避和结果未知分类；
+5. DLQ/quarantine、人工重试、主动查询与对账；
+6. 调用审计脱敏和毒消息隔离。
 
-先写详细实施计划并让用户确认，不提前实现地址物流、真实支付供应商或阶段 4 Gateway。
+先写详细实施计划并让用户确认，不提前迁移抽奖奖励，不实现阶段 6 地址物流闭环。
 
 以下内容是抽奖核心的非阻断优化，不替代阶段 3 主线。
 

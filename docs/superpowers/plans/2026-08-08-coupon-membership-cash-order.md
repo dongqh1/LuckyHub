@@ -92,11 +92,11 @@
 
 ## Task 8: Document, migrate, verify and hand off Phase 3
 
-- [ ] Create `docs/coupon-membership-order-api.md`; update README, master route and handoff with exact endpoints, permissions, states and boundaries.
-- [ ] Verify an empty temporary schema migrates V1->V13, then revoke its grant and drop only that schema in `finally`.
-- [ ] Run the Phase 3 focused suite, full `test`, `package '-DskipTests'`, `git diff --check`, link/UTF-8 checks and JAR OpenAPI smoke test.
-- [ ] Record exact counts, artifact size, asset review and known boundaries; mark every plan checkbox complete.
-- [ ] Document a start-to-finish local run example; commit `docs: hand off phase three commerce`.
+- [x] Create `docs/coupon-membership-order-api.md`; update README, master route and handoff with exact endpoints, permissions, states and boundaries.
+- [x] Verify an empty temporary schema migrates V1->V13, then revoke its grant and drop only that schema in `finally`.
+- [x] Run the Phase 3 focused suite, full `test`, `package '-DskipTests'`, `git diff --check`, link/UTF-8 checks and JAR OpenAPI smoke test.
+- [x] Record exact counts, artifact size, asset review and known boundaries; mark every plan checkbox complete.
+- [x] Document a start-to-finish local run example; commit `docs: hand off phase three commerce`.
 
 ## Completion Boundary
 

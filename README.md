@@ -66,7 +66,13 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 阶段 2 的 7 个接口、权限、请求响应、错误码、幂等规则和 PowerShell 示例见
 [`docs/points-redemption-api.md`](docs/points-redemption-api.md)。
 
-当前数据库迁移已到 V10；阶段 2 全量回归 312/312 通过。可运行产物使用以下命令生成和启动：
+阶段 3 优惠券、会员、现金订单和模拟支付 API、状态、权限与完整调用示例见
+[`docs/coupon-membership-order-api.md`](docs/coupon-membership-order-api.md)。
+
+阶段 3 的已完成实施记录见
+[`docs/superpowers/plans/2026-08-08-coupon-membership-cash-order.md`](docs/superpowers/plans/2026-08-08-coupon-membership-cash-order.md)。
+
+当前数据库迁移已到 V13。可运行产物使用以下命令生成和启动：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'
