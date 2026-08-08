@@ -92,7 +92,7 @@ src/main/resources/db/migration/
 - Consumes: Existing Flyway V1-V7 schema and `ADMIN`/`USER` roles.
 - Produces: `product`, `product_sku`, `reward_definition`, nullable `marketing_prize.reward_definition_id`, and permission codes `catalog:read`, `catalog:manage`, `reward:manage`, `inventory:manage`.
 
-- [ ] **Step 1: Verify the pre-change baseline**
+- [x] **Step 1: Verify the pre-change baseline**
 
 Run:
 
@@ -104,7 +104,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 
 Expected: MySQL and Redis report healthy; Maven reports all existing tests passed. Record the test count in the commit notes. Stop if the baseline is red.
 
-- [ ] **Step 2: Write the failing V8 schema contract test**
+- [x] **Step 2: Write the failing V8 schema contract test**
 
 Create `CatalogRewardSchemaContractTests.java` with these exact assertions:
 
@@ -180,7 +180,7 @@ class CatalogRewardSchemaContractTests {
 }
 ```
 
-- [ ] **Step 3: Run the schema contract and verify it fails**
+- [x] **Step 3: Run the schema contract and verify it fails**
 
 Run:
 
@@ -191,7 +191,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because V8 tables and permissions do not exist.
 
-- [ ] **Step 4: Add the V8 migration**
+- [x] **Step 4: Add the V8 migration**
 
 Create `V8__add_catalog_and_reward_foundation.sql` with:
 
@@ -299,7 +299,7 @@ WHERE admin_role.role_code = 'ADMIN'
   AND existing_relation.role_id IS NULL;
 ```
 
-- [ ] **Step 5: Add permission constants**
+- [x] **Step 5: Add permission constants**
 
 Add these constants before the private constructor in `PermissionCodes.java`:
 
@@ -310,7 +310,7 @@ public static final String REWARD_MANAGE = "reward:manage";
 public static final String INVENTORY_MANAGE = "inventory:manage";
 ```
 
-- [ ] **Step 6: Run V8 contracts and the existing migration tests**
+- [x] **Step 6: Run V8 contracts and the existing migration tests**
 
 Run:
 
@@ -321,7 +321,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS. Flyway current version is 8; old V5 guard behavior remains covered.
 
-- [ ] **Step 7: Commit V8**
+- [x] **Step 7: Commit V8**
 
 ```powershell
 git add -- src/main/resources/db/migration/V8__add_catalog_and_reward_foundation.sql `

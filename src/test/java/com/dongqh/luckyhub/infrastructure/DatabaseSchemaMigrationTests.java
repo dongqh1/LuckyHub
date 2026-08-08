@@ -44,7 +44,10 @@ class DatabaseSchemaMigrationTests {
             "lottery_draw_record",
             "user_benefit",
             "message_outbox",
-            "message_consume_record"
+            "message_consume_record",
+            "product",
+            "product_sku",
+            "reward_definition"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(

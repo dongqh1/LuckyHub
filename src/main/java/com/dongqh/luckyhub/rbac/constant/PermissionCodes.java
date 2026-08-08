@@ -98,6 +98,18 @@ public final class PermissionCodes {
     public static final String BENEFIT_READ_ALL =
             "benefit:read:all";
 
+    public static final String CATALOG_READ =
+            "catalog:read";
+
+    public static final String CATALOG_MANAGE =
+            "catalog:manage";
+
+    public static final String REWARD_MANAGE =
+            "reward:manage";
+
+    public static final String INVENTORY_MANAGE =
+            "inventory:manage";
+
     private PermissionCodes() {
     }
 }
