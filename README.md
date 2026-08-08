@@ -51,5 +51,17 @@ MySQL 原子库存、事务、Outbox、Redis Stream、权益履约和超时对�
 Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档见
 [`docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md`](docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md)。
 
+迷你商城、积分、优惠券、会员和物流的已批准总体设计见
+[`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`](docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md)。
+
+六阶段开发顺序、恢复检查和当前阶段入口见
+[`docs/LuckyHub-迷你商城下一阶段执行总路线.md`](docs/LuckyHub-迷你商城下一阶段执行总路线.md)。
+
+阶段 1 商品、统一奖励与渠道库存的详细实施记录见
+[`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`](docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md)。
+
+阶段 1 的 11 个接口、权限、请求响应、错误码、数据模型和 PowerShell 示例见
+[`docs/catalog-reward-inventory-api.md`](docs/catalog-reward-inventory-api.md)。
+
 当前开发进度、已完成模块和下一步任务见
 [`docs/LuckyHub-开发进度交接总结.md`](docs/LuckyHub-开发进度交接总结.md)。

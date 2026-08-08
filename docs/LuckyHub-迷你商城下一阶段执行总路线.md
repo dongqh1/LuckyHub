@@ -10,8 +10,8 @@
 
 ```text
 请先读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
-再执行其中“恢复检查”，然后按“当前阶段”链接的实施计划从第一个未勾选任务继续。
-不要跳到后续阶段，不要修改已经发布的 V1-V7。
+再执行其中“恢复检查”，然后根据“当前阶段”的规划输入编写阶段 2 实施计划。
+计划确认前不要写阶段 2 代码，不要跳到后续阶段，不要修改已经发布的 V1-V9。
 ```
 
 恢复检查：
@@ -38,35 +38,43 @@ docker compose ps
 - 分支：`master`；
 - 已批准设计提交：`18b6ad8 docs: design lottery mini mall`；
 - 现有抽奖核心、Outbox、Redis Stream、权益占位处理器保持可用；
-- V1-V7 是已发布迁移，只能新增 V8 及后续迁移；
+- V1-V9 是已发布迁移，只能新增 V10 及后续迁移；
+- 阶段 1 功能基线：`90257bb feat: expose channel inventory API`；
 - `.codex-progress/` 和 `.superpowers/` 是未跟踪辅助目录，不要提交；
 - Windows + PowerShell 7 + Java 17；
 - Maven 统一通过 `scripts/Invoke-Maven.ps1` 执行。
 
 ## 3. 当前阶段
 
-当前只执行阶段 1：
+阶段 1 已完成。当前只进行阶段 2 的实施计划编写：
 
-> **商品、统一奖励与渠道库存基础**
+> **积分账户与积分商城**
 
-详细计划：
+规划输入：
 
-`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`
+```text
+docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md
+docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md
+docs/catalog-reward-inventory-api.md
+```
 
-阶段 1 的完成标志：
+下一步先根据已经交付的 SKU、积分价格、`POINTS` 渠道库存和幂等接口，创建独立的阶段 2 实施计划。计划获得确认前，不编写积分账户或兑换订单代码，也不提前进入优惠券、会员、支付、地址或物流。
 
-- 新增 V8 商品/奖励迁移和 V9 渠道库存迁移；
-- 商品、SKU、奖励定义具备管理 API；
-- 渠道库存支持分配、预占、确认、释放和幂等流水；
-- 旧 `marketing_prize`、旧活动奖品和现有抽奖流程不改变行为；
-- 新增测试和原有测试全部通过；
-- 更新本总路线，将当前阶段切换为阶段 2。
+阶段 1 验收证据：
 
-阶段 1 未完成前，不创建积分、优惠券、会员、订单、支付、地址或物流代码。
+- 功能基线：`90257bb feat: expose channel inventory API`；
+- V8/V9 从空数据库随 V1-V7 依次迁移成功；
+- 空库迁移契约：14 个测试，0 失败，0 错误；
+- 阶段 1 聚焦测试：39 个测试，0 失败，0 错误；
+- 全量回归：274 个测试，0 失败，0 错误；
+- 打包：`BUILD SUCCESS`，生成 `target/luckyhub-0.0.1-SNAPSHOT.jar`；
+- 审查：Critical 0，Important 0；
+- 阶段 1 API：`docs/catalog-reward-inventory-api.md`；
+- 阶段 1 完成介绍：`docs/progress/阶段1-任务8-阶段交付完成介绍.md`。
 
 ## 4. 六阶段执行顺序
 
-### 阶段 1：商品、统一奖励与渠道库存基础
+### 阶段 1：商品、统一奖励与渠道库存基础（已完成）
 
 交付：
 

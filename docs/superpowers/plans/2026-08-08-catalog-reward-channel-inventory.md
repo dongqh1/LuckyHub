@@ -997,7 +997,7 @@ git commit -m "feat: expose channel inventory API"
 - Consumes: all Phase 1 APIs, migrations, and test evidence.
 - Produces: a reproducible handoff and the decision boundary for Phase 2.
 
-- [ ] **Step 1: Write API and data-model documentation**
+- [x] **Step 1: Write API and data-model documentation**
 
 Document every Phase 1 endpoint with permission, request, response, error code, and PowerShell `Invoke-RestMethod` example. Document channel codes exactly:
 
@@ -1009,11 +1009,11 @@ LOTTERY:{activityId}
 
 State that only `MALL` and `POINTS` are configured in Phase 1 and `LOTTERY:{activityId}` is reserved for Phase 5. Explain that the new reward definition is not yet used by current draws.
 
-- [ ] **Step 2: Update README and handoff**
+- [x] **Step 2: Update README and handoff**
 
 Add links to the approved design, master execution route, Phase 1 plan, and API document. In the handoff, list V8/V9, new permissions, packages, endpoints, exact test result, known boundaries, and the next phase.
 
-- [ ] **Step 3: Run focused Phase 1 verification**
+- [x] **Step 3: Run focused Phase 1 verification**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -1022,7 +1022,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: all listed tests PASS with zero failures and zero errors.
 
-- [ ] **Step 4: Run full regression and package verification**
+- [x] **Step 4: Run full regression and package verification**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
@@ -1033,7 +1033,7 @@ git status --short
 
 Expected: full test suite PASS; package reports `BUILD SUCCESS`; `git diff --check` has no output; status contains only intended documentation changes plus the pre-existing untracked helper directories.
 
-- [ ] **Step 5: Request code review**
+- [x] **Step 5: Request code review**
 
 Review against these explicit questions:
 
@@ -1047,11 +1047,11 @@ Review against these explicit questions:
 
 Fix every Critical or Important finding and rerun Steps 3-4.
 
-- [ ] **Step 6: Mark Phase 1 complete in the master route**
+- [x] **Step 6: Mark Phase 1 complete in the master route**
 
 Only after verification and review, change `docs/LuckyHub-迷你商城下一阶段执行总路线.md` so “当前阶段” points to Phase 2 planning. Record the final commit hash and fresh test count. Do not write Phase 2 implementation code in this commit.
 
-- [ ] **Step 7: Commit the Phase 1 handoff**
+- [x] **Step 7: Commit the Phase 1 handoff**
 
 ```powershell
 git add -- README.md docs/catalog-reward-inventory-api.md `
@@ -1062,6 +1062,8 @@ git status --short --branch
 ```
 
 Expected: tracked workspace is clean; only known untracked helper directories remain.
+
+**完成介绍：** [阶段 1 · 任务 8：阶段文档、验证与交付完成介绍](../../progress/阶段1-任务8-阶段交付完成介绍.md)
 
 ---
 

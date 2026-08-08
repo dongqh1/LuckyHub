@@ -1,16 +1,16 @@
 # LuckyHub 开发进度交接总结
 
-> 更新时间：2026-08-01
+> 更新时间：2026-08-08
 >
 > 用途：压缩聊天上下文，供下次开发直接读取。
 >
 > 项目目录：`E:\ANotes\software\luckyhub`
 
-🎉 LuckyHub 抽奖核心（2026-07-31 至 2026-08-01）
+🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1 基础（截至 2026-08-08）
 
-Progress：抽奖核心、Redis 配额和锁、Outbox/Redis Stream、权益履约、超时对账、七个统一 API、权限数据范围、教学文档和真实中间件验证全部完成；最终 235/235 测试通过。
+Progress：抽奖核心保持可用；迷你商城阶段 1 已完成商品/SKU、统一奖励定义、渠道库存、11 个 API、V8/V9、权限和文档。阶段 1 聚焦测试 39/39、空库迁移测试 14/14、全量回归 274/274 通过。
 
-Plans：计划内必做任务为零；下一阶段可从毒消息 DLQ、权益事件身份交叉校验、V8 CHECK 约束或真实第三方权益接口中选择。
+Plans：阶段 1 必做任务为零。下一步只编写阶段 2“积分账户与积分商城”实施计划，依据已交付的 SKU、积分价格和 `POINTS` 渠道库存接口拆分任务；尚未开始阶段 2 代码。
 
 Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpowers`/`.codex-progress` 过程文件，未提交、不影响运行。
 
@@ -23,7 +23,8 @@ Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpo
 ```text
 请先读取 docs/LuckyHub-开发进度交接总结.md，
 再执行 git status --short 和 git log -5 --oneline，
-然后根据“后续可选任务”继续。
+然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
+为阶段 2“积分账户与积分商城”编写独立实施计划，不直接写阶段 2 代码。
 ```
 
 最小检查命令：
@@ -51,21 +52,44 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 ## 2. 当前最终状态
 
 - 分支：`master`
-- 最终功能基线：`03c242b docs: finalize lottery specification`
-- 已推送：`origin/master`
-- 推送后本地与远程：`behind 0 / ahead 0`
-- tracked 工作区：干净
+- 抽奖核心基线：`03c242b docs: finalize lottery specification`
+- 阶段 1 功能基线：`90257bb feat: expose channel inventory API`
+- 当前远程同步状态：本阶段未执行推送，使用恢复检查命令确认
+- tracked 工作区：阶段 1 交接提交后应为干净
 - Docker MySQL/Redis：最终验收时已启动并健康
 - Java：17
 - Spring Boot：4.1.0
 - MySQL：8.4
 - Redis：配额、预占、Redisson 锁、Stream 消息
-- Flyway：V1–V7 全部通过校验
+- Flyway：V1–V9 全部通过校验
 
-最终 fresh 验收证据：
+阶段 1 聚焦验收证据：
 
 ```text
-Tests run: 235
+Tests run: 39
+Failures: 0
+Errors: 0
+Skipped: 0
+BUILD SUCCESS
+```
+
+空数据库迁移验收证据：
+
+```text
+临时数据库：luckyhub_phase1_verify
+Flyway：从 Empty Schema 依次成功应用 V1-V9
+Tests run: 14
+Failures: 0
+Errors: 0
+Skipped: 0
+BUILD SUCCESS
+临时数据库与临时授权已清理
+```
+
+全量回归证据：
+
+```text
+Tests run: 274
 Failures: 0
 Errors: 0
 Skipped: 0
@@ -76,7 +100,7 @@ BUILD SUCCESS
 
 ```text
 target/luckyhub-0.0.1-SNAPSHOT.jar
-69,314,051 bytes
+69,386,112 bytes
 BUILD SUCCESS
 ```
 
@@ -166,6 +190,60 @@ BUILD SUCCESS
 - 对账与创建订单使用同一把 draw lock，避免“先释放、后成功”的免费抽奖竞争；
 - 完整交叉校验 Redis reservation 七字段与 MySQL 订单身份。
 
+### 3.8 迷你商城阶段 1 基础
+
+已完成：
+
+- `catalog` 包：商品、默认 SKU、现金价、积分价、购买方式、用户查询和管理员创建；
+- `reward` 包：`PRODUCT/COUPON/POINTS/MEMBERSHIP/DRAW_CHANCE` 统一奖励定义；
+- `inventory.channel` 包：SKU 总库存、渠道分配、预占、确认、释放、查询和不可变幂等流水；
+- 商品响应不包含任何总库存、可用库存、预占库存或已消费库存字段；
+- 渠道库存使用 MySQL 条件更新，100 个请求并发争抢 10 件时只有 10 个成功；
+- 相同业务号或预占号重复调用只产生一次效果，不同参数重用同一编号会返回冲突；
+- 新库存和旧 `ActivityPrizeInventoryService` 独立，现有抽奖库存、Outbox 和事件行为未改变。
+
+新增权限：
+
+```text
+catalog:read
+catalog:manage
+reward:manage
+inventory:manage
+```
+
+角色默认分配：USER 和 ADMIN 拥有 `catalog:read`；只有 ADMIN 拥有三个管理权限。
+
+新增 11 个 API：
+
+```text
+POST /api/admin/products
+GET  /api/products
+GET  /api/products/{id}
+
+POST /api/admin/reward-definitions
+GET  /api/admin/reward-definitions/{id}
+
+POST /api/admin/inventory/skus/initialize
+POST /api/admin/inventory/channels/allocate
+POST /api/admin/inventory/reservations
+POST /api/admin/inventory/reservations/{reservationNo}/confirm
+POST /api/admin/inventory/reservations/{reservationNo}/release
+GET  /api/admin/inventory/skus/{skuId}/channels/{channelCode}
+```
+
+完整请求、响应、错误码和 PowerShell 示例：
+
+```text
+docs/catalog-reward-inventory-api.md
+```
+
+阶段 1 边界：
+
+- 只使用 `MALL` 和 `POINTS` 渠道；`LOTTERY:{activityId}` 保留到阶段 5；
+- 新 `reward_definition` 尚未接入当前抽奖；
+- 没有实现积分账户、兑换订单、优惠券、会员、支付、地址或物流；
+- 当前券、积分、会员和实物权益 handler 仍是抽奖核心时期的状态占位实现，不是真实外部系统。
+
 ---
 
 ## 4. 数据库迁移
@@ -184,7 +262,18 @@ BUILD SUCCESS
 - `V7__lease_outbox_delivery.sql`
   - Outbox `PROCESSING` 状态和 `claim_token`租约。
 
-不要修改已发布的 V1–V7；后续数据库变更新建 V8。
+迷你商城阶段 1 新迁移：
+
+- `V8__add_catalog_and_reward_foundation.sql`
+  - `product`、`product_sku`、`reward_definition`；
+  - `marketing_prize.reward_definition_id` 可空兼容字段；
+  - 4 个新权限及角色分配。
+- `V9__add_channel_inventory.sql`
+  - `sku_inventory`、`inventory_channel_stock`；
+  - `inventory_reservation`、`inventory_ledger`；
+  - 库存平衡、状态、唯一业务号和预占号约束。
+
+不要修改已发布的 V1–V9；后续数据库变更新建 V10。
 
 ---
 
@@ -393,9 +482,36 @@ docs/activity-management-api.md
 - Important：0；
 - Ready to merge：Yes。
 
+阶段 1 审查逐项结论：
+
+- 库存条件 SQL 在扣减前检查余额，并由 100 请求争抢 10 件的测试证明不会产生负库存；
+- 唯一流水记录并校验业务号对应的 SKU、渠道、操作和数量，相同编号不能变更另一份资产；
+- 总库存分配 SQL 要求 `total_stock - allocated_stock >= quantity`，所有渠道之和不能超过总库存；
+- 阶段 1 没有修改 `lottery`、`activity`、`benefit` 的主业务代码，旧抽奖库存和事件链保持不变；
+- `ProductView/SkuView` 没有库存字段，用户商品接口不泄漏库存；
+- 业务重复键被翻译为稳定错误码，其他数据库异常由全局异常处理器转换为安全系统错误；
+- 与阶段 1 起点 `18b6ad8` 比较，V1–V7 内容没有变化；只新增 V8/V9。
+
+阶段 1 审查结果：Critical 0，Important 0。
+
 ---
 
-## 11. 后续可选任务
+## 11. 下一阶段与抽奖可选任务
+
+### 当前唯一主线：阶段 2 积分账户与积分商城
+
+下一次开发先从真实阶段 1 接口编写独立实施计划，不直接开始写代码。计划至少覆盖：
+
+1. 用户积分账户和不可变积分流水；
+2. 幂等入账、条件扣减和冲正；
+3. 单 SKU 积分兑换单；
+4. `POINTS` 渠道库存的预占、确认和释放；
+5. 用户余额/流水 API 和管理员积分调整 API；
+6. 并发扣减、重复业务号、兑换失败补偿和权限测试。
+
+阶段 2 不做优惠券、会员、现金订单、支付或物流，这些继续按总路线进入后续阶段。
+
+以下内容是抽奖核心的非阻断优化，不替代阶段 2 主线。
 
 这些不是第一版阻断项，不需要同时完成。
 
@@ -448,9 +564,14 @@ docs/activity-management-api.md
 
 ## 13. 下次会话的建议读取顺序
 
-1. `docs/LuckyHub-开发进度交接总结.md`
-2. `git status --short` 与 `git log -5 --oneline`
-3. 根据选择的下一任务，再定向读取：
+1. `docs/LuckyHub-迷你商城下一阶段执行总路线.md`
+2. `docs/LuckyHub-开发进度交接总结.md`
+3. `git status --short` 与 `git log -5 --oneline`
+4. 阶段 2 规划时定向读取：
+   - 总体设计：`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`
+   - 阶段 1 计划：`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`
+   - 阶段 1 API：`docs/catalog-reward-inventory-api.md`
+5. 如需维护旧抽奖，再读取：
    - 主流程：`docs/LuckyHub-抽奖核心流程实现详解.md`
    - API：`docs/lottery-api.md`
    - 最终设计：`docs/superpowers/specs/2026-07-31-lottery-core-design.md`
