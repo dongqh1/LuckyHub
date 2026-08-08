@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.coupon.mapper; import com.baomidou.mybatisplus.core.mapper.BaseMapper; import com.dongqh.luckyhub.coupon.entity.CouponTemplate; public interface CouponTemplateMapper extends BaseMapper<CouponTemplate> {}

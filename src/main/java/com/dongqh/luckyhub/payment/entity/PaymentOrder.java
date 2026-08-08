@@ -1,0 +1,3 @@
+package com.dongqh.luckyhub.payment.entity;
+import com.baomidou.mybatisplus.annotation.*; import com.dongqh.luckyhub.payment.enums.*; import lombok.Getter; import lombok.Setter; import java.time.LocalDateTime;
+@Getter @Setter @TableName("payment_order") public class PaymentOrder { @TableId(type=IdType.AUTO) private Long id; private String paymentNo; private String orderNo; private Long userId; private Long amountCent; private PaymentStatus status; private PaymentResult callbackResult; private String failureReason; private LocalDateTime paidAt; @TableField(fill=FieldFill.INSERT) private LocalDateTime createdAt; @TableField(fill=FieldFill.INSERT_UPDATE) private LocalDateTime updatedAt; }

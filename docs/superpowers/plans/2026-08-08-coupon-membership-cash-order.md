@@ -26,11 +26,11 @@
 
 **Files:** create V11/V12/V13 migrations; create coupon/membership/order/payment enums, entities, DTOs, views and mappers; create schema/domain contract tests and completion introduction.
 
-- [ ] Write schema/domain tests for tables, unique keys, CHECK constraints, permissions, DTO bounds and stable error codes.
-- [ ] Run `'-Dtest=Phase3SchemaContractTests,Phase3DomainContractTests' test` and verify RED because V11-V13/types are absent.
-- [ ] Add V11 coupon tables, V12 membership tables, V13 cash order/payment tables and permission seeds.
-- [ ] Add focused domain types and mapper interfaces; run the tests GREEN.
-- [ ] Document a fixed-amount coupon, yearly membership and cash-order snapshot example; commit `feat: add phase three commerce schema`.
+- [x] Write schema/domain tests for tables, unique keys, CHECK constraints, permissions, DTO bounds and stable error codes.
+- [x] Run `'-Dtest=Phase3SchemaContractTests,Phase3DomainContractTests' test` and verify RED because V11-V13/types are absent.
+- [x] Add V11 coupon tables, V12 membership tables, V13 cash order/payment tables and permission seeds.
+- [x] Add focused domain types and mapper interfaces; run the tests GREEN.
+- [x] Document a fixed-amount coupon, yearly membership and cash-order snapshot example; commit `feat: add phase three commerce schema`.
 
 ## Task 2: Implement coupon assets and state machine
 

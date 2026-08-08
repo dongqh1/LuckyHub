@@ -1,0 +1,3 @@
+package com.dongqh.luckyhub.membership.entity;
+import com.baomidou.mybatisplus.annotation.*; import lombok.Getter; import lombok.Setter; import java.time.LocalDateTime;
+@Getter @Setter @TableName("user_membership") public class UserMembership { @TableId(type=IdType.AUTO) private Long id; private Long userId; private String membershipLevel; private LocalDateTime startsAt; private LocalDateTime expiresAt; private Integer discountBasisPoints; private Integer dailyDrawBonus; private Integer pointsMultiplierBasisPoints; private Integer version; @TableField(fill=FieldFill.INSERT) private LocalDateTime createdAt; @TableField(fill=FieldFill.INSERT_UPDATE) private LocalDateTime updatedAt; }

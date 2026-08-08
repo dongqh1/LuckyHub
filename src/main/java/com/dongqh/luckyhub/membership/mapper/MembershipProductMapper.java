@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.membership.mapper; import com.baomidou.mybatisplus.core.mapper.BaseMapper; import com.dongqh.luckyhub.membership.entity.MembershipProduct; public interface MembershipProductMapper extends BaseMapper<MembershipProduct> {}
