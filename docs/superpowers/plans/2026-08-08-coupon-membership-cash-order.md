@@ -76,11 +76,11 @@
 
 **Endpoints:** admin coupon/member product creation and issue; user coupon/member reads and membership purchase; cash-order create/read/page/cancel; payment create and signed callback.
 
-- [ ] Write failing controller and real filter/interceptor tests covering self scope, 201/200, validation, 401/403 and stable business errors.
-- [ ] Run `'-Dtest=Phase3ControllerTests,Phase3SecurityChainIntegrationTests' test` and verify RED.
-- [ ] Add thin controllers, permission constants and `/api/coupons/*`, `/api/memberships/*`, `/api/orders/*`, `/api/payments/*` security mappings; callback remains signature-authenticated.
-- [ ] Run API/security and lottery security regression GREEN.
-- [ ] Document PowerShell flows from admin setup through paid/cancelled order; commit `feat: expose phase three commerce API`.
+- [x] Write failing controller and real filter/interceptor tests covering self scope, 201/200, validation, 401/403 and stable business errors.
+- [x] Run `'-Dtest=Phase3ControllerTests,Phase3SecurityChainIntegrationTests' test` and verify RED.
+- [x] Add thin controllers, permission constants and `/api/coupons/*`, `/api/memberships/*`, `/api/orders/*`, `/api/payments/*` security mappings; callback remains signature-authenticated.
+- [x] Run API/security and lottery security regression GREEN.
+- [x] Document PowerShell flows from admin setup through paid/cancelled order; commit `feat: expose phase three commerce API`.
 
 ## Task 7: Prove concurrency and end-to-end safety
 

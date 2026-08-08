@@ -145,6 +145,16 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    @Override
+    public PaymentView simulate(String paymentNo, PaymentResult result, String failureReason) {
+        PaymentOrder payment = find(paymentNo.trim());
+        if (payment == null) {
+            throw error(PaymentErrorCode.PAYMENT_NOT_FOUND);
+        }
+        String signature = signForSimulation(payment.getPaymentNo(), result, payment.getAmountCent());
+        return callback(new PaymentCallbackCommand(payment.getPaymentNo(), result, failureReason, signature));
+    }
+
     private void verifySignature(PaymentOrder payment, PaymentCallbackCommand command) {
         byte[] expected = signForSimulation(payment.getPaymentNo(), command.result(), payment.getAmountCent())
                 .getBytes(StandardCharsets.UTF_8);

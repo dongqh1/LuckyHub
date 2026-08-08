@@ -31,7 +31,11 @@ public class PermissionInterceptorConfig
                         "/api/lottery/**",
                         "/api/benefits/**",
                         "/api/products/**",
-                        "/api/points/**"
+                        "/api/points/**",
+                        "/api/coupons/**",
+                        "/api/memberships/**",
+                        "/api/orders/**",
+                        "/api/payments/**"
                 )
                 .order(100);
     }

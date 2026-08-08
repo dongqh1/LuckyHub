@@ -11,4 +11,6 @@ public interface PaymentService {
     PaymentView callback(PaymentCallbackCommand command);
 
     String signForSimulation(String paymentNo, PaymentResult result, long amountCent);
+
+    PaymentView simulate(String paymentNo, PaymentResult result, String failureReason);
 }

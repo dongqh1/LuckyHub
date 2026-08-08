@@ -119,6 +119,16 @@ public final class PermissionCodes {
     public static final String POINTS_ADJUST =
             "points:adjust";
 
+    public static final String COUPON_READ = "coupon:read";
+    public static final String COUPON_MANAGE = "coupon:manage";
+    public static final String MEMBERSHIP_READ = "membership:read";
+    public static final String MEMBERSHIP_MANAGE = "membership:manage";
+    public static final String ORDER_CREATE = "order:create";
+    public static final String ORDER_READ = "order:read";
+    public static final String ORDER_CANCEL = "order:cancel";
+    public static final String PAYMENT_CREATE = "payment:create";
+    public static final String PAYMENT_SIMULATE = "payment:simulate";
+
     private PermissionCodes() {
     }
 }
