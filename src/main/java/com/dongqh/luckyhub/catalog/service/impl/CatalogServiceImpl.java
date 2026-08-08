@@ -10,6 +10,7 @@ import com.dongqh.luckyhub.catalog.enums.ProductErrorCode;
 import com.dongqh.luckyhub.catalog.mapper.ProductMapper;
 import com.dongqh.luckyhub.catalog.mapper.ProductSkuMapper;
 import com.dongqh.luckyhub.catalog.model.RedeemableSkuSnapshot;
+import com.dongqh.luckyhub.catalog.model.PurchasableSkuSnapshot;
 import com.dongqh.luckyhub.catalog.service.CatalogService;
 import com.dongqh.luckyhub.catalog.vo.ProductView;
 import com.dongqh.luckyhub.catalog.vo.SkuView;
@@ -118,6 +119,19 @@ public class CatalogServiceImpl implements CatalogService {
                 sku.getId(), product.getProductCode(), product.getProductName(),
                 sku.getSkuCode(), sku.getSkuName(), product.getProductType(),
                 product.getImageUrl(), sku.getPointsPrice()));
+    }
+
+    @Override
+    public Optional<PurchasableSkuSnapshot> findPurchasableSku(long skuId) {
+        ProductSku sku = skuMapper.selectById(skuId);
+        if (sku == null || !Integer.valueOf(ENABLED).equals(sku.getStatus())
+                || !Boolean.TRUE.equals(sku.getCashEnabled())
+                || sku.getCashPriceCent() == null || sku.getCashPriceCent() <= 0) return Optional.empty();
+        Product product = productMapper.selectById(sku.getProductId());
+        if (product == null || !Integer.valueOf(ENABLED).equals(product.getStatus())) return Optional.empty();
+        return Optional.of(new PurchasableSkuSnapshot(sku.getId(), product.getId(), product.getProductCode(),
+                product.getProductName(), sku.getSkuCode(), sku.getSkuName(), product.getProductType(),
+                product.getImageUrl(), sku.getCashPriceCent()));
     }
 
     private List<ProductSku> findEnabledSkus(long productId) {

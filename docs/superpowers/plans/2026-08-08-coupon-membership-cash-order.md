@@ -56,11 +56,11 @@
 
 **Interfaces:** add `CatalogService.findPurchasableSku`; create `OrderPricingService.quote`; `CashOrderService.create/get/page`.
 
-- [ ] Write failing pricing/order tests for cash-enabled SKU, exact multiplication, membership basis points, coupon threshold/scope/stacking, minimum zero, snapshots, idempotency and rollback.
-- [ ] Run `'-Dtest=OrderPricingServiceTests,CashOrderServiceTests' test` and verify RED.
-- [ ] Implement price calculation and claim-first PENDING_PAYMENT order creation: snapshot -> MALL reserve -> coupon lock -> persisted snapshot in one transaction.
-- [ ] Run order, coupon and inventory regressions GREEN.
-- [ ] Document `100元 -> 9折 -> 满80减20 -> 应付70元`; commit `feat: create priced cash orders`.
+- [x] Write failing pricing/order tests for cash-enabled SKU, exact multiplication, membership basis points, coupon threshold/scope/stacking, minimum zero, snapshots, idempotency and rollback.
+- [x] Run `'-Dtest=OrderPricingServiceTests,CashOrderServiceTests' test` and verify RED.
+- [x] Implement price calculation and claim-first PENDING_PAYMENT order creation: snapshot -> MALL reserve -> coupon lock -> persisted snapshot in one transaction.
+- [x] Run order, coupon and inventory regressions GREEN.
+- [x] Document `100元 -> 9折 -> 满80减20 -> 应付70元`; commit `feat: create priced cash orders`.
 
 ## Task 5: Implement simulated payment, callback, cancellation and timeout
 

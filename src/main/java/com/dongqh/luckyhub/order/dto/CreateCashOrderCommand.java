@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.order.dto; import jakarta.validation.constraints.*; public record CreateCashOrderCommand(@NotBlank @Size(max=64) String orderNo,@NotNull @Positive Long skuId,@NotNull @Min(1) @Max(100) Integer quantity,@Positive Long userCouponId) {}
