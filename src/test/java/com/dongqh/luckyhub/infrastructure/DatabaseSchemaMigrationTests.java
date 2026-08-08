@@ -51,7 +51,10 @@ class DatabaseSchemaMigrationTests {
             "sku_inventory",
             "inventory_channel_stock",
             "inventory_reservation",
-            "inventory_ledger"
+            "inventory_ledger",
+            "points_account",
+            "points_ledger",
+            "points_redemption_order"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -69,7 +72,12 @@ class DatabaseSchemaMigrationTests {
             "sku_inventory:sku_id",
             "inventory_channel_stock:sku_id,channel_code",
             "inventory_reservation:reservation_no",
-            "inventory_ledger:business_no"
+            "inventory_ledger:business_no",
+            "points_account:user_id",
+            "points_ledger:business_type,business_id",
+            "points_ledger:reversal_of_ledger_id",
+            "points_redemption_order:redemption_no",
+            "points_redemption_order:reversal_no"
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -151,6 +159,16 @@ class DatabaseSchemaMigrationTests {
 
         assertThat(successfulMigrations).isEqualTo(1);
         assertThat(claimTokenColumn).isEqualTo(1);
+    }
+
+    @Test
+    void addsPointsAccountAndRedemptionThroughVersionTenMigration() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version = '10' AND success = 1
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isEqualTo(1);
     }
 
     @Test

@@ -137,17 +137,20 @@ src/main/java/com/dongqh/luckyhub/inventory/channel/service/impl/ChannelInventor
 
 ## Task 1: Add V10 points and redemption schema
 
+**完成介绍：** [阶段2-任务1-V10积分与兑换数据库完成介绍](../../progress/阶段2-任务1-V10积分与兑换数据库完成介绍.md)
+
 **Files:**
 - Create: `src/main/resources/db/migration/V10__add_points_account_and_redemption.sql`
 - Create: `src/test/java/com/dongqh/luckyhub/points/PointsSchemaContractTests.java`
 - Modify: `src/test/java/com/dongqh/luckyhub/infrastructure/DatabaseSchemaMigrationTests.java`
+- Modify: `src/test/java/com/dongqh/luckyhub/lottery/LotteryMigrationGuardTests.java`
 - Create: `docs/progress/阶段2-任务1-V10积分与兑换数据库完成介绍.md`
 
 **Interfaces:**
 - Consumes: V1-V9, `sys_user`, `product_sku`, and V9 inventory tables.
 - Produces: `points_account`, `points_ledger`, `points_redemption_order`, three permissions, and inventory reversal-compatible CHECK constraints.
 
-- [ ] **Step 1: Write the failing V10 schema contract**
+- [x] **Step 1: Write the failing V10 schema contract**
 
 Create tests that assert:
 
@@ -170,7 +173,7 @@ assertThat(checkClause("inventory_ledger", "chk_inventory_ledger_operation"))
         .contains("RETURN");
 ```
 
-- [ ] **Step 2: Run the contract and verify RED**
+- [x] **Step 2: Run the contract and verify RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -179,7 +182,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because V10 tables and permissions do not exist.
 
-- [ ] **Step 3: Create the exact V10 migration**
+- [x] **Step 3: Create the exact V10 migration**
 
 Use this schema. Do not add foreign keys; the existing project uses application validation and indexes without FK coupling.
 
@@ -295,7 +298,7 @@ WHERE admin_role.role_code = 'ADMIN'
   AND existing_relation.role_id IS NULL;
 ```
 
-- [ ] **Step 4: Run V10 contracts and migration regression**
+- [x] **Step 4: Run V10 contracts and migration regression**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -304,7 +307,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS with V1-V9 checksum guards unchanged and one successful V10 migration.
 
-- [ ] **Step 5: Verify V1-V9 are untouched**
+- [x] **Step 5: Verify V1-V9 are untouched**
 
 ```powershell
 git diff 230ea93 -- src/main/resources/db/migration/V1__create_luckyhub_schema.sql `
@@ -320,7 +323,7 @@ git diff 230ea93 -- src/main/resources/db/migration/V1__create_luckyhub_schema.s
 
 Expected: no output.
 
-- [ ] **Step 6: Write the task introduction and commit**
+- [x] **Step 6: Write the task introduction and commit**
 
 The introduction must explain account/ledger/order tables, unique business identity, why reversal is additive history, V10 inventory CHECK changes, permissions, and a concrete balance example.
 
@@ -328,6 +331,7 @@ The introduction must explain account/ledger/order tables, unique business ident
 git add -- src/main/resources/db/migration/V10__add_points_account_and_redemption.sql `
   src/test/java/com/dongqh/luckyhub/points/PointsSchemaContractTests.java `
   src/test/java/com/dongqh/luckyhub/infrastructure/DatabaseSchemaMigrationTests.java `
+  src/test/java/com/dongqh/luckyhub/lottery/LotteryMigrationGuardTests.java `
   docs/progress/阶段2-任务1-V10积分与兑换数据库完成介绍.md `
   docs/superpowers/plans/2026-08-08-points-account-redemption.md
 git commit -m "feat: add points and redemption schema"
