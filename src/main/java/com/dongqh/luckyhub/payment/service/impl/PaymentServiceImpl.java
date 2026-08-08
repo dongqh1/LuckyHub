@@ -59,7 +59,8 @@ public class PaymentServiceImpl implements PaymentService {
 
         MallOrder order = orderMapper.lockByOrderNo(orderNo);
         if (order == null || !Objects.equals(order.getUserId(), userId)
-                || order.getStatus() != CashOrderStatus.PENDING_PAYMENT) {
+                || order.getStatus() != CashOrderStatus.PENDING_PAYMENT
+                || !order.getPaymentDeadline().isAfter(LocalDateTime.now())) {
             throw error(PaymentErrorCode.ORDER_NOT_PAYABLE);
         }
         PaymentOrder payment = new PaymentOrder();

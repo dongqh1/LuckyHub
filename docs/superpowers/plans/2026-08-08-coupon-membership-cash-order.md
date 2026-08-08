@@ -84,11 +84,11 @@
 
 ## Task 7: Prove concurrency and end-to-end safety
 
-- [ ] Add an end-to-end test: issue coupon -> buy membership -> create discounted order -> create payment -> signed success callback -> PAID, coupon USED, MALL stock CONFIRMED.
-- [ ] Add concurrent duplicate order/payment/cancel/callback tests and cross-user denial tests; verify RED for any uncovered gap before fixing it.
-- [ ] Run all Phase 3 focused tests repeatedly and old points/inventory/lottery regressions.
-- [ ] Review negative money, coupon double-use, membership over-extension, stock/coupon half-success, callback replay, snapshots and raw-error leakage; fix every Critical/Important issue through RED-GREEN.
-- [ ] Document the full `199元商品 + 年卡9折 + 20元券` lifecycle; commit `test: prove phase three commerce safety`.
+- [x] Add an end-to-end test: issue coupon -> buy membership -> create discounted order -> create payment -> signed success callback -> PAID, coupon USED, MALL stock CONFIRMED.
+- [x] Add concurrent duplicate order/payment/cancel/callback tests and cross-user denial tests; verify RED for any uncovered gap before fixing it.
+- [x] Run all Phase 3 focused tests repeatedly and old points/inventory/lottery regressions.
+- [x] Review negative money, coupon double-use, membership over-extension, stock/coupon half-success, callback replay, snapshots and raw-error leakage; fix every Critical/Important issue through RED-GREEN.
+- [x] Document the full `199元商品 + 年卡9折 + 20元券` lifecycle; commit `test: prove phase three commerce safety`.
 
 ## Task 8: Document, migrate, verify and hand off Phase 3
 
