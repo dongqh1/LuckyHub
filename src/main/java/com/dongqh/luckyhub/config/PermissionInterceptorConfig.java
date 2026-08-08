@@ -29,7 +29,8 @@ public class PermissionInterceptorConfig
                 .addPathPatterns(
                         "/api/admin/**",
                         "/api/lottery/**",
-                        "/api/benefits/**"
+                        "/api/benefits/**",
+                        "/api/products/**"
                 )
                 .order(100);
     }

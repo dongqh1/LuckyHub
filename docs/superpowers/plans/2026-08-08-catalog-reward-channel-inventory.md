@@ -427,7 +427,7 @@ git commit -m "feat: define catalog and reward domains"
 - Consumes: `ProductMapper`, `ProductSkuMapper`, `PermissionCodes.CATALOG_READ`, and `PermissionCodes.CATALOG_MANAGE`.
 - Produces: `CatalogService.create(CreateProductCommand)`, `CatalogService.get(long)`, `CatalogService.page(ProductQuery)`, `POST /api/admin/products`, `GET /api/products`, and `GET /api/products/{id}`.
 
-- [ ] **Step 1: Define and test the create command contract**
+- [x] **Step 1: Define and test the create command contract**
 
 Create this record exactly:
 
@@ -486,7 +486,7 @@ public class ProductQuery {
 
 Test valid cash-only, points-only, and both-enabled commands; test all three invalid combinations.
 
-- [ ] **Step 2: Write failing transactional service tests**
+- [x] **Step 2: Write failing transactional service tests**
 
 Cover these exact behaviors in `CatalogServiceTests`:
 
@@ -506,7 +506,7 @@ SKU_CODE_DUPLICATE(44003, "SKU编码已存在", HttpStatus.CONFLICT),
 PRODUCT_CONFIG_INVALID(44004, "商品配置不合法", HttpStatus.BAD_REQUEST)
 ```
 
-- [ ] **Step 3: Implement the service interfaces**
+- [x] **Step 3: Implement the service interfaces**
 
 Use these signatures:
 
@@ -531,7 +531,7 @@ public record ProductView(
 
 `SkuView` contains all price flags and the SKU status/version. Return immutable lists using `List.copyOf`.
 
-- [ ] **Step 4: Run service tests**
+- [x] **Step 4: Run service tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -540,7 +540,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 5: Write failing controller security and JSON tests**
+- [x] **Step 5: Write failing controller security and JSON tests**
 
 Verify:
 
@@ -550,13 +550,13 @@ Verify:
 - user JSON exposes prices and purchase flags but not inventory counts;
 - the real authentication filter and permission interceptor return 401/403 on missing identity/permission.
 
-- [ ] **Step 6: Implement controllers**
+- [x] **Step 6: Implement controllers**
 
 Use separate controllers so user reads never inherit admin routing. `CatalogController` has class mapping `/api/products`, a `GET` method receiving `@Valid @ModelAttribute ProductQuery`, and a `GET /{id}` method receiving `@Positive long id`; both use `@RequirePermission(PermissionCodes.CATALOG_READ)`. `CatalogAdminController` has class mapping `/api/admin/products` and a `POST` method receiving `@Valid @RequestBody CreateProductCommand`, returning `ApiResponse<ProductView>` with `@ResponseStatus(HttpStatus.CREATED)` and `@RequirePermission(PermissionCodes.CATALOG_MANAGE)`.
 
 Follow the response conventions from `PrizeController`: `ApiResponse`, `PageResponse`, `@Valid`, `@ResponseStatus(HttpStatus.CREATED)`, and `@RequirePermission`.
 
-- [ ] **Step 7: Run controller and security tests**
+- [x] **Step 7: Run controller and security tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -565,7 +565,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit catalog APIs**
+- [x] **Step 8: Commit catalog APIs**
 
 ```powershell
 git add -- src/main/java/com/dongqh/luckyhub/catalog `
