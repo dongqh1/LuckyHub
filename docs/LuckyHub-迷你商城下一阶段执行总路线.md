@@ -46,7 +46,7 @@ docker compose ps
 
 ## 3. 当前阶段
 
-阶段 1 已完成。当前只进行阶段 2 的实施计划编写：
+阶段 1 已完成。阶段 2 实施计划已经生成，当前等待用户确认：
 
 > **积分账户与积分商城**
 
@@ -58,7 +58,19 @@ docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md
 docs/catalog-reward-inventory-api.md
 ```
 
-下一步先根据已经交付的 SKU、积分价格、`POINTS` 渠道库存和幂等接口，创建独立的阶段 2 实施计划。计划获得确认前，不编写积分账户或兑换订单代码，也不提前进入优惠券、会员、支付、地址或物流。
+阶段 2 详细计划：
+
+```text
+docs/superpowers/plans/2026-08-08-points-account-redemption.md
+```
+
+规划完成介绍：
+
+```text
+docs/progress/阶段2-规划-积分账户与积分商城执行计划完成介绍.md
+```
+
+下一步由用户审阅并确认计划。确认后从任务 1 的第一个未勾选步骤开始执行。确认前不编写积分账户或兑换订单代码，也不提前进入优惠券、会员、支付、地址或物流。
 
 阶段 1 验收证据：
 

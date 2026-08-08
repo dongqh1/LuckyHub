@@ -10,7 +10,7 @@
 
 Progress：抽奖核心保持可用；迷你商城阶段 1 已完成商品/SKU、统一奖励定义、渠道库存、11 个 API、V8/V9、权限和文档。阶段 1 聚焦测试 39/39、空库迁移测试 14/14、全量回归 274/274 通过。
 
-Plans：阶段 1 必做任务为零。下一步只编写阶段 2“积分账户与积分商城”实施计划，依据已交付的 SKU、积分价格和 `POINTS` 渠道库存接口拆分任务；尚未开始阶段 2 代码。
+Plans：阶段 1 必做任务为零。阶段 2“积分账户与积分商城”详细计划已生成于 `docs/superpowers/plans/2026-08-08-points-account-redemption.md`，当前等待用户确认；尚未开始阶段 2 代码。
 
 Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpowers`/`.codex-progress` 过程文件，未提交、不影响运行。
 
@@ -23,8 +23,8 @@ Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpo
 ```text
 请先读取 docs/LuckyHub-开发进度交接总结.md，
 再执行 git status --short 和 git log -5 --oneline，
-然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
-为阶段 2“积分账户与积分商城”编写独立实施计划，不直接写阶段 2 代码。
+然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 2 详细计划，
+若用户已确认计划，就从第一个未勾选任务开始；否则先请用户审阅，不直接写阶段 2 代码。
 ```
 
 最小检查命令：
@@ -500,7 +500,13 @@ docs/activity-management-api.md
 
 ### 当前唯一主线：阶段 2 积分账户与积分商城
 
-下一次开发先从真实阶段 1 接口编写独立实施计划，不直接开始写代码。计划至少覆盖：
+阶段 2 详细计划：
+
+```text
+docs/superpowers/plans/2026-08-08-points-account-redemption.md
+```
+
+计划已覆盖：
 
 1. 用户积分账户和不可变积分流水；
 2. 幂等入账、条件扣减和冲正；

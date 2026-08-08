@@ -60,6 +60,9 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 阶段 1 商品、统一奖励与渠道库存的详细实施记录见
 [`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`](docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md)。
 
+阶段 2 积分账户、不可变积分流水和积分兑换的待确认执行计划见
+[`docs/superpowers/plans/2026-08-08-points-account-redemption.md`](docs/superpowers/plans/2026-08-08-points-account-redemption.md)。
+
 阶段 1 的 11 个接口、权限、请求响应、错误码、数据模型和 PowerShell 示例见
 [`docs/catalog-reward-inventory-api.md`](docs/catalog-reward-inventory-api.md)。
 
