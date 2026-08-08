@@ -947,7 +947,7 @@ git commit -m "feat: manage idempotent channel inventory"
 - Consumes: `ChannelInventoryService` and `PermissionCodes.INVENTORY_MANAGE`.
 - Produces: inventory initialization, allocation, reservation lifecycle, and query endpoints for controlled development and later order integration.
 
-- [ ] **Step 1: Write failing endpoint contract tests**
+- [x] **Step 1: Write failing endpoint contract tests**
 
 Test these exact endpoints:
 
@@ -962,11 +962,11 @@ GET  /api/admin/inventory/skus/{skuId}/channels/{channelCode}
 
 All require `inventory:manage`. Verify 201 for initialize/reserve, 200 for other successful calls, validation envelope, 401, 403, and stable business errors.
 
-- [ ] **Step 2: Implement the controller**
+- [x] **Step 2: Implement the controller**
 
 Follow `PrizeController` conventions. Use `@Positive` for SKU IDs, `@Size(max = 100)` for path channel values after URL decoding, and `@Size(max = 64)` for reservation numbers. Controller methods only validate transport input and delegate; they contain no stock arithmetic.
 
-- [ ] **Step 3: Run API tests**
+- [x] **Step 3: Run API tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -975,13 +975,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit inventory API**
+- [x] **Step 4: Commit inventory API**
 
 ```powershell
 git add -- src/main/java/com/dongqh/luckyhub/inventory/channel/controller `
   src/test/java/com/dongqh/luckyhub/inventory/ChannelInventoryControllerTests.java
 git commit -m "feat: expose channel inventory API"
 ```
+
+**完成介绍：** [阶段 1 · 任务 7：渠道库存管理 API 完成介绍](../../progress/阶段1-任务7-渠道库存管理API完成介绍.md)
 
 ## Task 8: Document, verify, review, and hand off Phase 1
 
