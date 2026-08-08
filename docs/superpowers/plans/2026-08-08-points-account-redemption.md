@@ -478,6 +478,8 @@ git commit -m "feat: define points domain"
 
 ## Task 3: Implement idempotent points account operations
 
+**完成介绍：** [阶段2-任务3-幂等积分账户服务完成介绍](../../progress/阶段2-任务3-幂等积分账户服务完成介绍.md)
+
 **Files:**
 - Create: `src/main/java/com/dongqh/luckyhub/points/service/PointsAccountService.java`
 - Create: `src/main/java/com/dongqh/luckyhub/points/service/impl/PointsAccountServiceImpl.java`
@@ -490,7 +492,7 @@ git commit -m "feat: define points domain"
 - Consumes: V10 account/ledger tables and Task 2 commands.
 - Produces: transactional credit, debit, reversal, and adjustment operations for redemption and future reward flows.
 
-- [ ] **Step 1: Define the service interface and mapper conditionals**
+- [x] **Step 1: Define the service interface and mapper conditionals**
 
 ```java
 public interface PointsAccountService {
@@ -519,7 +521,7 @@ WHERE user_id = #{userId} AND balance <= 9223372036854775807 - #{amount};
 INSERT IGNORE INTO points_ledger(...);
 ```
 
-- [ ] **Step 2: Write failing account and idempotency tests**
+- [x] **Step 2: Write failing account and idempotency tests**
 
 Cover:
 
@@ -539,7 +541,7 @@ mutation for a missing or disabled user -> 47009 and no account/ledger
 zero, Long.MIN_VALUE, and addition overflow -> 47005
 ```
 
-- [ ] **Step 3: Run tests and verify RED**
+- [x] **Step 3: Run tests and verify RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -548,7 +550,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because service behavior is not implemented.
 
-- [ ] **Step 4: Implement short READ_COMMITTED transactions**
+- [x] **Step 4: Implement short READ_COMMITTED transactions**
 
 Implementation order for every mutation:
 
@@ -570,7 +572,7 @@ Prefer claiming the ledger before the balance update when possible. If claim-fir
 
 Inject `SysUserMapper` and reject missing/disabled target users with `POINTS_USER_UNAVAILABLE`; never create an account row for an arbitrary numeric ID. `credit` accepts only `LOTTERY_REWARD`, `ORDER_REWARD`, and `MEMBERSHIP_BONUS`; `debit` accepts only `REDEMPTION`; `MANUAL_ADJUSTMENT` is reachable only through `adjust`, and `REVERSAL` only through `reverseDebit`.
 
-- [ ] **Step 5: Run service and legacy inventory tests**
+- [x] **Step 5: Run service and legacy inventory tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -579,7 +581,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 6: Write the task introduction and commit**
+- [x] **Step 6: Write the task introduction and commit**
 
 Include examples for credit, debit, insufficient balance, duplicate request, and reversal. Explain why the original debit row never changes.
 
