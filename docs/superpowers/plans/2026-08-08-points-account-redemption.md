@@ -341,6 +341,8 @@ git commit -m "feat: add points and redemption schema"
 
 ## Task 2: Define points domain contracts and persistence mappings
 
+**完成介绍：** [阶段2-任务2-积分领域契约完成介绍](../../progress/阶段2-任务2-积分领域契约完成介绍.md)
+
 **Files:**
 - Create: every `points/entity`, `points/enums`, `points/mapper`, internal DTO, and VO file listed in File Structure.
 - Modify: `src/main/java/com/dongqh/luckyhub/config/MybatisPlusConfig.java`
@@ -352,7 +354,7 @@ git commit -m "feat: add points and redemption schema"
 - Consumes: V10 columns and project MyBatis-Plus conventions.
 - Produces: stable Java types used by Tasks 3-7.
 
-- [ ] **Step 1: Write the domain contract test**
+- [x] **Step 1: Write the domain contract test**
 
 Assert exact enum values, table annotations, mapper scan, permission constants, immutable VO records, and these command signatures:
 
@@ -383,7 +385,7 @@ public record AdminPointsAdjustmentCommand(
 
 `AdminPointsAdjustmentCommand` compact constructor must reject `delta == 0` and `delta == Long.MIN_VALUE`.
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -392,7 +394,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because the `points` domain does not exist.
 
-- [ ] **Step 3: Add enums and stable errors**
+- [x] **Step 3: Add enums and stable errors**
 
 ```java
 public enum PointsBusinessType {
@@ -417,7 +419,7 @@ public enum PointsErrorCode implements ErrorCode {
 }
 ```
 
-- [ ] **Step 4: Add entities, mappers, DTOs, VOs, permissions, and mapper scan**
+- [x] **Step 4: Add entities, mappers, DTOs, VOs, permissions, and mapper scan**
 
 Use `@TableName`, `@TableId(type = IdType.AUTO)`, enum fields, `LocalDateTime`, and project field-fill conventions. Add mapper scanning for `com.dongqh.luckyhub.points.mapper`.
 
@@ -449,7 +451,7 @@ public record PointsRedemptionView(
 ) {}
 ```
 
-- [ ] **Step 5: Run domain contracts**
+- [x] **Step 5: Run domain contracts**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -458,7 +460,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 6: Write the task introduction and commit**
+- [x] **Step 6: Write the task introduction and commit**
 
 Explain each enum, error range `47001-47009`, why amounts are positive plus a direction, and why `balanceAfter` is a ledger snapshot.
 

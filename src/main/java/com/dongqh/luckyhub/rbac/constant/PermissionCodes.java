@@ -110,6 +110,15 @@ public final class PermissionCodes {
     public static final String INVENTORY_MANAGE =
             "inventory:manage";
 
+    public static final String POINTS_READ =
+            "points:read";
+
+    public static final String POINTS_REDEEM =
+            "points:redeem";
+
+    public static final String POINTS_ADJUST =
+            "points:adjust";
+
     private PermissionCodes() {
     }
 }
