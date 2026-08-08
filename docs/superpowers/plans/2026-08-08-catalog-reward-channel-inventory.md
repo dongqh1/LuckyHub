@@ -671,11 +671,11 @@ Expected: tests PASS before the commit is created.
 - Consumes: `product_sku` from V8.
 - Produces: SKU totals, channel allocation, reservations, and immutable ledger tables.
 
-- [ ] **Step 1: Write the failing V9 contract**
+- [x] **Step 1: Write the failing V9 contract**
 
 Assert that these tables exist: `sku_inventory`, `inventory_channel_stock`, `inventory_reservation`, `inventory_ledger`. Assert unique indexes exist on `sku_inventory.sku_id`, `(sku_id, channel_code)`, `inventory_reservation.reservation_no`, and `inventory_ledger.business_no` by querying `information_schema.statistics`.
 
-- [ ] **Step 2: Run and verify failure**
+- [x] **Step 2: Run and verify failure**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -684,7 +684,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because V9 does not exist.
 
-- [ ] **Step 3: Create the exact V9 migration**
+- [x] **Step 3: Create the exact V9 migration**
 
 ```sql
 CREATE TABLE sku_inventory (
@@ -755,7 +755,7 @@ CREATE TABLE inventory_ledger (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='不可变库存流水';
 ```
 
-- [ ] **Step 4: Run V9 and all migration contracts**
+- [x] **Step 4: Run V9 and all migration contracts**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -764,13 +764,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS; Flyway current version is 9.
 
-- [ ] **Step 5: Commit V9**
+- [x] **Step 5: Commit V9**
 
 ```powershell
 git add -- src/main/resources/db/migration/V9__add_channel_inventory.sql `
   src/test/java/com/dongqh/luckyhub/inventory/ChannelInventorySchemaContractTests.java
 git commit -m "feat: add channel inventory schema"
 ```
+
+**完成介绍：** [阶段 1 · 任务 5：V9 渠道库存数据库完成介绍](../../progress/阶段1-任务5-V9渠道库存数据库完成介绍.md)
 
 ## Task 6: Implement idempotent channel inventory operations
 

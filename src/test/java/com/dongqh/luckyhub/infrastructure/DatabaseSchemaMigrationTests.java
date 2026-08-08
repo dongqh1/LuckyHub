@@ -47,7 +47,11 @@ class DatabaseSchemaMigrationTests {
             "message_consume_record",
             "product",
             "product_sku",
-            "reward_definition"
+            "reward_definition",
+            "sku_inventory",
+            "inventory_channel_stock",
+            "inventory_reservation",
+            "inventory_ledger"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -61,7 +65,11 @@ class DatabaseSchemaMigrationTests {
             "lottery_draw_record:request_id,sequence_no",
             "user_benefit:draw_record_id",
             "message_outbox:event_id",
-            "message_consume_record:event_id,consumer_name"
+            "message_consume_record:event_id,consumer_name",
+            "sku_inventory:sku_id",
+            "inventory_channel_stock:sku_id,channel_code",
+            "inventory_reservation:reservation_no",
+            "inventory_ledger:business_no"
     );
 
     private final JdbcTemplate jdbcTemplate;
