@@ -342,7 +342,7 @@ git commit -m "feat: add catalog and reward schema"
 - Consumes: V8 tables.
 - Produces: `ProductType`, `RewardType`, MyBatis entities/mappers, and nullable `MarketingPrize.rewardDefinitionId`.
 
-- [ ] **Step 1: Write failing enum and entity contract tests**
+- [x] **Step 1: Write failing enum and entity contract tests**
 
 Use these exact enum expectations:
 
@@ -355,7 +355,7 @@ assertThat(RewardType.values()).containsExactly(
 
 In `CatalogDomainContractTests`, insert a `Product`, insert its `ProductSku`, reload both mappers, and assert every persisted field including integer-cent and points prices. In `RewardDomainContractTests`, insert one `POINTS` definition with `targetId == null`, quantity `500`, and JSON `{"source":"test"}`, then assert the reload is byte-for-byte equivalent for business fields.
 
-- [ ] **Step 2: Run tests and verify compilation fails**
+- [x] **Step 2: Run tests and verify compilation fails**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -364,7 +364,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because the domain classes do not exist.
 
-- [ ] **Step 3: Add exact enums and mapper interfaces**
+- [x] **Step 3: Add exact enums and mapper interfaces**
 
 ```java
 package com.dongqh.luckyhub.catalog.enums;
@@ -386,7 +386,7 @@ public interface RewardDefinitionMapper extends BaseMapper<RewardDefinition> {}
 
 Use the project entity conventions: `@TableName`, `@TableId(type = IdType.AUTO)`, Lombok getters/setters, `FieldFill.INSERT`, and `FieldFill.INSERT_UPDATE`. Map every V8 column with Java types `Long`, `String`, `Boolean`, `Integer`, `LocalDateTime`, `ProductType`, and `RewardType`. Store `configSnapshot` as `String`; do not add a JSON library abstraction in this phase.
 
-- [ ] **Step 4: Add the compatibility field without changing old behavior**
+- [x] **Step 4: Add the compatibility field without changing old behavior**
 
 Add to `MarketingPrize.java` immediately after `prizeType`:
 
@@ -396,7 +396,7 @@ private Long rewardDefinitionId;
 
 Do not change `CreatePrizeCommand`, `PrizeServiceImpl`, activity prize services, draw snapshots, or lottery events in this phase.
 
-- [ ] **Step 5: Run domain contracts and legacy prize/lottery contracts**
+- [x] **Step 5: Run domain contracts and legacy prize/lottery contracts**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -405,7 +405,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS; old prize persistence accepts a null reward definition.
 
-- [ ] **Step 6: Commit domain contracts**
+- [x] **Step 6: Commit domain contracts**
 
 ```powershell
 git add -- src/main/java/com/dongqh/luckyhub/catalog `

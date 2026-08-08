@@ -19,6 +19,7 @@ public class MarketingPrize{
     private Long id;
     private String prizeName;
     private PrizeType prizeType;
+    private Long rewardDefinitionId;
     private PrizeLevel prizeLevel;
     private String imageUrl;
     private String description;
