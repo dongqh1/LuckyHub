@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.membership.vo; import com.dongqh.luckyhub.membership.enums.MembershipCardType; public record MembershipProductView(Long id,String productCode,String productName,String membershipLevel,MembershipCardType cardType,Integer durationDays,Long priceCent,Integer discountBasisPoints,Integer dailyDrawBonus,Integer pointsMultiplierBasisPoints,Integer status) {}

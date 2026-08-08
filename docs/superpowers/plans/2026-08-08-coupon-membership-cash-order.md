@@ -46,11 +46,11 @@
 
 **Interfaces:** `MembershipService.createProduct`, `purchase`, `getMine`, `activeBenefit`.
 
-- [ ] Write failing tests for MONTH/QUARTER/YEAR products, idempotent purchase, same-level extension, inactive membership and concurrent duplicate purchase.
-- [ ] Run `'-Dtest=MembershipServiceTests,MembershipConcurrencyTests' test` and verify RED.
-- [ ] Implement row locking, `max(expiresAt, now) + durationDays`, immutable grant history and benefit snapshots.
-- [ ] Run membership tests GREEN.
-- [ ] Document a yearly card renewed 30 days early without losing the remaining 30 days; commit `feat: renew member benefits`.
+- [x] Write failing tests for MONTH/QUARTER/YEAR products, idempotent purchase, same-level extension, inactive membership and concurrent duplicate purchase.
+- [x] Run `'-Dtest=MembershipServiceTests,MembershipConcurrencyTests' test` and verify RED.
+- [x] Implement row locking, `max(expiresAt, now) + durationDays`, immutable grant history and benefit snapshots.
+- [x] Run membership tests GREEN.
+- [x] Document a yearly card renewed 30 days early without losing the remaining 30 days; commit `feat: renew member benefits`.
 
 ## Task 4: Implement deterministic pricing and atomic cash-order creation
 
