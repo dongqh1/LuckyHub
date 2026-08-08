@@ -34,7 +34,8 @@ public class AuthenticationFilterConfig {
                 "/api/admin/*",
                 "/api/lottery/*",
                 "/api/benefits/*",
-                "/api/products/*"
+                "/api/products/*",
+                "/api/points/*"
         );
 
         registration.setOrder(20);

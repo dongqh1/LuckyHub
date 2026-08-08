@@ -30,7 +30,8 @@ public class PermissionInterceptorConfig
                         "/api/admin/**",
                         "/api/lottery/**",
                         "/api/benefits/**",
-                        "/api/products/**"
+                        "/api/products/**",
+                        "/api/points/**"
                 )
                 .order(100);
     }

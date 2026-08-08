@@ -928,6 +928,8 @@ git commit -m "feat: redeem products with points"
 
 ## Task 7: Expose points and redemption APIs
 
+**完成介绍：** [阶段2-任务7-积分与兑换API完成介绍](../../progress/阶段2-任务7-积分与兑换API完成介绍.md)
+
 **Files:**
 - Create: `src/main/java/com/dongqh/luckyhub/points/service/PointsQueryService.java`
 - Create: `src/main/java/com/dongqh/luckyhub/points/service/impl/PointsQueryServiceImpl.java`
@@ -943,7 +945,7 @@ git commit -m "feat: redeem products with points"
 - Consumes: login context, permissions, account service, query service, and redemption service.
 - Produces: five user endpoints and two admin endpoints.
 
-- [ ] **Step 1: Define exact endpoints**
+- [x] **Step 1: Define exact endpoints**
 
 ```text
 GET  /api/points/account
@@ -975,7 +977,7 @@ public interface PointsQueryService {
 
 `getAccount` delegates to the account service and returns zero for a valid user with no account row. `pageLedgers` always adds `user_id = current user` to the MyBatis query, orders by `created_at DESC, id DESC`, and never accepts a caller-supplied user id.
 
-- [ ] **Step 2: Write failing controller and real-security tests**
+- [x] **Step 2: Write failing controller and real-security tests**
 
 Assert:
 
@@ -992,7 +994,7 @@ normal user cannot read another user's redemption because no userId input exists
 normal user cannot call adjustments or reversals
 ```
 
-- [ ] **Step 3: Implement thin controllers**
+- [x] **Step 3: Implement thin controllers**
 
 Controllers only obtain `LoginContext.require().userId()`, validate transport input, delegate, and wrap `ApiResponse`. No balance arithmetic, price calculation, stock transition, or data-scope replacement belongs in controllers.
 
@@ -1007,7 +1009,7 @@ PointsDirection direction;
 PointsRedemptionStatus status;
 ```
 
-- [ ] **Step 4: Run API and security tests**
+- [x] **Step 4: Run API and security tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -1016,7 +1018,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 5: Write the task introduction and commit**
+- [x] **Step 5: Write the task introduction and commit**
 
 Include PowerShell examples for balance query, admin +500 adjustment, 3000-point redemption, ledger query, and admin reversal. Explain 401/403 and self-scope.
 
