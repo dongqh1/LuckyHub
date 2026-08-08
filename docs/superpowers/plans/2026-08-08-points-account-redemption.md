@@ -1034,6 +1034,8 @@ git commit -m "feat: expose points redemption API"
 
 ## Task 8: Document, verify, review, and hand off Phase 2
 
+**完成介绍：** [阶段2-任务8-阶段交付完成介绍](../../progress/阶段2-任务8-阶段交付完成介绍.md)
+
 **Files:**
 - Create: `docs/points-redemption-api.md`
 - Modify: `README.md`
@@ -1045,7 +1047,7 @@ git commit -m "feat: expose points redemption API"
 - Consumes: every Phase 2 API, migration, transaction, and test result.
 - Produces: reproducible Phase 2 handoff and the decision boundary for Phase 3 planning.
 
-- [ ] **Step 1: Write complete API and state documentation**
+- [x] **Step 1: Write complete API and state documentation**
 
 For every endpoint document permission, request, response, errors, and PowerShell example. Explain:
 
@@ -1060,17 +1062,17 @@ product/SKU/price/image snapshots
 no coupons, membership, cash, payment, address, logistics, or points reward
 ```
 
-- [ ] **Step 2: Update README, route, and handoff**
+- [x] **Step 2: Update README, route, and handoff**
 
 Add V10, permissions, packages, seven endpoints, exact focused/full test results, migration evidence, known boundaries, and Phase 3 as planning-only. Do not write Phase 3 code.
 
-- [ ] **Step 3: Verify V10 on a temporary empty schema**
+- [x] **Step 3: Verify V10 on a temporary empty schema**
 
 Create `luckyhub_phase2_verify`, grant only the existing app user temporary access, set `MYSQL_DATABASE` for the Maven process, run `DatabaseSchemaMigrationTests,PointsSchemaContractTests,ChannelInventorySchemaContractTests`, then revoke access and drop only the temporary schema in `finally`.
 
 Expected Flyway path: `Empty Schema -> V1 -> ... -> V10`, all migration contracts PASS.
 
-- [ ] **Step 4: Run focused Phase 2 verification**
+- [x] **Step 4: Run focused Phase 2 verification**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -1079,7 +1081,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: zero failures and zero errors.
 
-- [ ] **Step 5: Run full regression and package**
+- [x] **Step 5: Run full regression and package**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
@@ -1090,7 +1092,7 @@ git status --short
 
 Expected: full suite and package `BUILD SUCCESS`; tracked changes contain only intended Phase 2 handoff files.
 
-- [ ] **Step 6: Review explicit asset-safety questions**
+- [x] **Step 6: Review explicit asset-safety questions**
 
 Answer with code/test evidence:
 
@@ -1109,7 +1111,7 @@ Are V1-V9 unchanged and are lottery/outbox/benefit behaviors unchanged?
 
 Fix every Critical/Important finding, then rerun Steps 3-5.
 
-- [ ] **Step 7: Mark Phase 2 complete and commit handoff**
+- [x] **Step 7: Mark Phase 2 complete and commit handoff**
 
 Only after all evidence is fresh, switch the master route to Phase 3 planning and record the final Phase 2 feature commit plus counts.
 

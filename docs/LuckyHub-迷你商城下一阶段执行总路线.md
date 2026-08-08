@@ -10,8 +10,8 @@
 
 ```text
 请先读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
-再执行其中“恢复检查”，然后根据“当前阶段”的规划输入编写阶段 2 实施计划。
-计划确认前不要写阶段 2 代码，不要跳到后续阶段，不要修改已经发布的 V1-V9。
+再执行其中“恢复检查”，然后根据“当前阶段”的规划输入编写阶段 3 实施计划。
+计划确认前不要写阶段 3 代码，不要跳到后续阶段，不要修改已经发布的 V1-V10。
 ```
 
 恢复检查：
@@ -38,17 +38,18 @@ docker compose ps
 - 分支：`master`；
 - 已批准设计提交：`18b6ad8 docs: design lottery mini mall`；
 - 现有抽奖核心、Outbox、Redis Stream、权益占位处理器保持可用；
-- V1-V9 是已发布迁移，只能新增 V10 及后续迁移；
+- V1-V10 是已发布迁移，后续变更只能新增 V11 及之后的迁移；
 - 阶段 1 功能基线：`90257bb feat: expose channel inventory API`；
+- 阶段 2 功能基线：`69dff03 feat: expose points redemption API`；
 - `.codex-progress/` 和 `.superpowers/` 是未跟踪辅助目录，不要提交；
 - Windows + PowerShell 7 + Java 17；
 - Maven 统一通过 `scripts/Invoke-Maven.ps1` 执行。
 
 ## 3. 当前阶段
 
-阶段 1 已完成。阶段 2 实施计划已经生成，当前等待用户确认：
+阶段 1、阶段 2 已完成。当前下一阶段为规划状态：
 
-> **积分账户与积分商城**
+> **阶段 3：优惠券、会员与现金订单（仅规划，尚未写代码）**
 
 规划输入：
 
@@ -58,19 +59,31 @@ docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md
 docs/catalog-reward-inventory-api.md
 ```
 
-阶段 2 详细计划：
+阶段 2 已完成计划与 API：
 
 ```text
 docs/superpowers/plans/2026-08-08-points-account-redemption.md
+docs/points-redemption-api.md
 ```
 
-规划完成介绍：
+阶段 2 最终完成介绍：
 
 ```text
-docs/progress/阶段2-规划-积分账户与积分商城执行计划完成介绍.md
+docs/progress/阶段2-任务8-阶段交付完成介绍.md
 ```
 
-下一步由用户审阅并确认计划。确认后从任务 1 的第一个未勾选步骤开始执行。确认前不编写积分账户或兑换订单代码，也不提前进入优惠券、会员、支付、地址或物流。
+下一次开发先依据总体设计、阶段 1/2 的真实接口编写阶段 3 详细实施计划，交用户确认后再编码。阶段 3 不包含真实支付供应商、地址物流或统一外部 Gateway；这些仍按阶段 4/6 执行。
+
+阶段 2 验收证据：
+
+- 功能基线：`69dff03 feat: expose points redemption API`；
+- V10 从空数据库随 V1-V9 依次迁移成功；
+- 空库迁移契约：17 个测试，0 失败，0 错误；
+- 阶段 2 聚焦测试：44 个测试，0 失败，0 错误；
+- 全量回归：312 个测试，0 失败，0 错误；
+- 打包：`BUILD SUCCESS`，JAR 69,445,276 字节；
+- 审查：Critical 0，Important 0；
+- API：`docs/points-redemption-api.md`。
 
 阶段 1 验收证据：
 
@@ -99,7 +112,7 @@ docs/progress/阶段2-规划-积分账户与积分商城执行计划完成介绍
 
 阶段验收后，依据真实接口签名编写阶段 2 计划。
 
-### 阶段 2：积分账户与积分商城
+### 阶段 2：积分账户与积分商城（已完成）
 
 依赖：阶段 1 的 SKU、积分兑换价和渠道库存。
 

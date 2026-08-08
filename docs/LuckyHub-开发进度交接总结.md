@@ -6,11 +6,11 @@
 >
 > 项目目录：`E:\ANotes\software\luckyhub`
 
-🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1 基础（截至 2026-08-08）
+🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1/2（截至 2026-08-08）
 
-Progress：抽奖核心保持可用；迷你商城阶段 1 已完成商品/SKU、统一奖励定义、渠道库存、11 个 API、V8/V9、权限和文档。阶段 1 聚焦测试 39/39、空库迁移测试 14/14、全量回归 274/274 通过。
+Progress：抽奖核心保持可用；阶段 1 已完成商品/SKU、统一奖励与渠道库存；阶段 2 已完成积分账户、不可变流水、POINTS 单 SKU 兑换、冲正、7 个 API 和 V10。阶段 2 聚焦测试 44/44、空库迁移测试 17/17、全量回归 312/312 通过。
 
-Plans：阶段 1 必做任务为零。阶段 2“积分账户与积分商城”详细计划已生成于 `docs/superpowers/plans/2026-08-08-points-account-redemption.md`，当前等待用户确认；尚未开始阶段 2 代码。
+Plans：阶段 1/2 必做任务为零。下一步仅编写和确认阶段 3“优惠券、会员与现金订单”实施计划；尚未开始阶段 3 代码。
 
 Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpowers`/`.codex-progress` 过程文件，未提交、不影响运行。
 
@@ -23,8 +23,8 @@ Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpo
 ```text
 请先读取 docs/LuckyHub-开发进度交接总结.md，
 再执行 git status --short 和 git log -5 --oneline，
-然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 2 详细计划，
-若用户已确认计划，就从第一个未勾选任务开始；否则先请用户审阅，不直接写阶段 2 代码。
+然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 2 已完成计划，
+根据真实接口编写阶段 3 详细计划；计划确认前不直接写阶段 3 代码。
 ```
 
 最小检查命令：
@@ -54,14 +54,28 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 - 分支：`master`
 - 抽奖核心基线：`03c242b docs: finalize lottery specification`
 - 阶段 1 功能基线：`90257bb feat: expose channel inventory API`
+- 阶段 2 功能基线：`69dff03 feat: expose points redemption API`
 - 当前远程同步状态：本阶段未执行推送，使用恢复检查命令确认
-- tracked 工作区：阶段 1 交接提交后应为干净
+- tracked 工作区：阶段 2 交接提交后应为干净
 - Docker MySQL/Redis：最终验收时已启动并健康
 - Java：17
 - Spring Boot：4.1.0
 - MySQL：8.4
 - Redis：配额、预占、Redisson 锁、Stream 消息
-- Flyway：V1–V9 全部通过校验
+- Flyway：V1–V10 全部通过校验
+
+阶段 2 最终验收证据：
+
+```text
+临时空库 V1->V10：17/17 通过
+阶段 2 聚焦测试：44/44 通过
+全量回归：312/312 通过
+Failures: 0
+Errors: 0
+打包：BUILD SUCCESS
+JAR：69,445,276 字节
+审查：Critical 0，Important 0
+```
 
 阶段 1 聚焦验收证据：
 
@@ -244,6 +258,46 @@ docs/catalog-reward-inventory-api.md
 - 没有实现积分账户、兑换订单、优惠券、会员、支付、地址或物流；
 - 当前券、积分、会员和实物权益 handler 仍是抽奖核心时期的状态占位实现，不是真实外部系统。
 
+### 3.9 迷你商城阶段 2：积分账户与积分商城
+
+已完成：
+
+- `points_account` 当前余额与版本；
+- `points_ledger` 不可变积分流水、余额快照和原流水关联；
+- 幂等入账、条件扣减、人工调整和加法式冲正；
+- 40 路请求争抢 17 积分不产生负余额；
+- 单 SKU、数量 1～100、仅 `POINTS` 渠道的积分兑换；
+- `PROCESSING -> COMPLETED -> REVERSED` 状态机；
+- 商品、SKU、类型、图片、积分单价和总积分历史快照；
+- 积分、库存、兑换订单同 MySQL 事务回滚；
+- 20 路同兑换号并发只产生一次扣分和一次库存消费；
+- 已确认渠道库存的幂等反向恢复；
+- 登录用户 self scope 与三项 RBAC 权限。
+
+新增权限：
+
+```text
+points:read
+points:redeem
+points:adjust
+```
+
+新增 7 个 API：
+
+```text
+GET  /api/points/account
+GET  /api/points/ledgers
+POST /api/points/redemptions
+GET  /api/points/redemptions
+GET  /api/points/redemptions/{redemptionNo}
+POST /api/admin/points/adjustments
+POST /api/admin/points/redemptions/{redemptionNo}/reverse
+```
+
+完整手册：`docs/points-redemption-api.md`。
+
+阶段 2 边界：积分不与现金混合；兑换不使用优惠券、会员折扣且不返积分；尚无优惠券、会员、现金订单、支付、地址、物流或外部 Gateway；抽奖的 POINTS handler 尚未改为调用本积分账户。
+
 ---
 
 ## 4. 数据库迁移
@@ -273,7 +327,14 @@ docs/catalog-reward-inventory-api.md
   - `inventory_reservation`、`inventory_ledger`；
   - 库存平衡、状态、唯一业务号和预占号约束。
 
-不要修改已发布的 V1–V9；后续数据库变更新建 V10。
+阶段 2 新迁移：
+
+- `V10__add_points_account_and_redemption.sql`
+  - `points_account`、`points_ledger`、`points_redemption_order`；
+  - `REVERSED/RETURN` 库存反向状态与流水操作；
+  - `points:read/redeem/adjust` 权限及角色分配。
+
+不要修改已发布的 V1–V10；后续数据库变更新建 V11。
 
 ---
 
@@ -498,26 +559,27 @@ docs/activity-management-api.md
 
 ## 11. 下一阶段与抽奖可选任务
 
-### 当前唯一主线：阶段 2 积分账户与积分商城
+### 当前唯一主线：规划阶段 3 优惠券、会员与现金订单
 
-阶段 2 详细计划：
+阶段 2 已完成计划与接口：
 
 ```text
 docs/superpowers/plans/2026-08-08-points-account-redemption.md
+docs/points-redemption-api.md
 ```
 
-计划已覆盖：
+阶段 3 规划应覆盖：
 
-1. 用户积分账户和不可变积分流水；
-2. 幂等入账、条件扣减和冲正；
-3. 单 SKU 积分兑换单；
-4. `POINTS` 渠道库存的预占、确认和释放；
-5. 用户余额/流水 API 和管理员积分调整 API；
-6. 并发扣减、重复业务号、兑换失败补偿和权限测试。
+1. 优惠券模板、用户券包、锁定/核销/释放/过期；
+2. 月卡、季卡、年卡及有效期顺延；
+3. 单 SKU 现金订单和价格快照；
+4. 商品原价 → 会员折扣 → 优惠券 → 应付金额；
+5. 模拟支付、幂等回调、取消和超时释放；
+6. 与现有 `MALL` 库存和用户权限的原子协调。
 
-阶段 2 不做优惠券、会员、现金订单、支付或物流，这些继续按总路线进入后续阶段。
+先写详细实施计划并让用户确认，不提前实现地址物流、真实支付供应商或阶段 4 Gateway。
 
-以下内容是抽奖核心的非阻断优化，不替代阶段 2 主线。
+以下内容是抽奖核心的非阻断优化，不替代阶段 3 主线。
 
 这些不是第一版阻断项，不需要同时完成。
 
@@ -535,7 +597,7 @@ docs/superpowers/plans/2026-08-08-points-account-redemption.md
 
 ### 优先级 C：数据库防御约束
 
-新建 V8，不修改 V5，可添加：
+如仍需要这些可选约束，应新建 V11 或之后的迁移，不修改 V5，可添加：
 
 - `result_type` 枚举 CHECK；
 - benefit status 枚举 CHECK；
@@ -573,10 +635,12 @@ docs/superpowers/plans/2026-08-08-points-account-redemption.md
 1. `docs/LuckyHub-迷你商城下一阶段执行总路线.md`
 2. `docs/LuckyHub-开发进度交接总结.md`
 3. `git status --short` 与 `git log -5 --oneline`
-4. 阶段 2 规划时定向读取：
+4. 阶段 3 规划时定向读取：
    - 总体设计：`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`
    - 阶段 1 计划：`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`
    - 阶段 1 API：`docs/catalog-reward-inventory-api.md`
+   - 阶段 2 计划：`docs/superpowers/plans/2026-08-08-points-account-redemption.md`
+   - 阶段 2 API：`docs/points-redemption-api.md`
 5. 如需维护旧抽奖，再读取：
    - 主流程：`docs/LuckyHub-抽奖核心流程实现详解.md`
    - API：`docs/lottery-api.md`
