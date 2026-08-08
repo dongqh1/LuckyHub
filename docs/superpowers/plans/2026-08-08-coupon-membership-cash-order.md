@@ -66,11 +66,11 @@
 
 **Interfaces:** `PaymentService.create`, `callback`; `CashOrderService.cancel`, `cancelExpired`; signed callback supports PROCESSING/SUCCESS/FAILURE.
 
-- [ ] Write failing tests for stable payment numbers, amount identity, signature rejection, duplicate success callback, failed/processing results, success confirmation, cancellation and timeout release.
-- [ ] Run `'-Dtest=PaymentServiceTests,OrderCancellationTests,PaymentConcurrencyTests' test` and verify RED.
-- [ ] Implement payment records, SHA-256 simulation signature verification, conditional transitions, inventory confirm/coupon use on success, and release on cancel/timeout.
-- [ ] Add bounded timeout scheduler and run payment/order regressions GREEN.
-- [ ] Document duplicate callback and a 30-minute timeout releasing both coupon and MALL stock; commit `feat: simulate cash order payments`.
+- [x] Write failing tests for stable payment numbers, amount identity, signature rejection, duplicate success callback, failed/processing results, success confirmation, cancellation and timeout release.
+- [x] Run `'-Dtest=PaymentServiceTests,OrderCancellationTests,PaymentConcurrencyTests' test` and verify RED.
+- [x] Implement payment records, SHA-256 simulation signature verification, conditional transitions, inventory confirm/coupon use on success, and release on cancel/timeout.
+- [x] Add bounded timeout scheduler and run payment/order regressions GREEN.
+- [x] Document duplicate callback and a 30-minute timeout releasing both coupon and MALL stock; commit `feat: simulate cash order payments`.
 
 ## Task 6: Expose Phase 3 APIs and security
 
