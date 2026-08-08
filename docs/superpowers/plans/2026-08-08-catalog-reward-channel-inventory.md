@@ -785,7 +785,7 @@ git commit -m "feat: add channel inventory schema"
 - Consumes: V9 tables and enabled SKU records.
 - Produces: total stock initialization, allocation, reserve, confirm, and release operations.
 
-- [ ] **Step 1: Define exact commands and service interface**
+- [x] **Step 1: Define exact commands and service interface**
 
 ```java
 public record InitializeSkuStockCommand(
@@ -823,7 +823,7 @@ public interface ChannelInventoryService {
 
 Normalize channel codes to uppercase trimmed values. Reserve business ledger number is `RESERVE:{reservationNo}`, confirm is `CONFIRM:{reservationNo}`, and release is `RELEASE:{reservationNo}`.
 
-- [ ] **Step 2: Write failing idempotency and state tests**
+- [x] **Step 2: Write failing idempotency and state tests**
 
 Cover:
 
@@ -848,7 +848,7 @@ INVENTORY_IDEMPOTENCY_CONFLICT(46004, "库存幂等参数冲突", HttpStatus.CON
 INVENTORY_SKU_UNAVAILABLE(46005, "SKU不可用于库存配置", HttpStatus.BAD_REQUEST)
 ```
 
-- [ ] **Step 3: Implement mapper conditional updates**
+- [x] **Step 3: Implement mapper conditional updates**
 
 `SkuInventoryMapper.allocateIfAvailable`:
 
@@ -878,7 +878,7 @@ int reserveIfAvailable(long skuId, String channelCode, int quantity);
 
 Also add conditional `confirmReserved` and `releaseReserved` updates that require `reserved_stock >= quantity`. Mapper methods return affected row count; the service translates zero rows to stable business errors.
 
-- [ ] **Step 4: Implement short transactional service methods**
+- [x] **Step 4: Implement short transactional service methods**
 
 Every mutation is one local `@Transactional` method. Check the ledger or reservation first, validate every identity field on duplicate requests, perform the conditional update, write the reservation transition, then insert one immutable ledger row. Do not catch and ignore `DuplicateKeyException`; on a duplicate race, reload and validate the winning row before returning.
 
@@ -892,7 +892,7 @@ public record ChannelInventoryView(
         String reservationNo, InventoryReservationStatus reservationStatus) {}
 ```
 
-- [ ] **Step 5: Run service tests**
+- [x] **Step 5: Run service tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -901,7 +901,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 6: Write and run concurrency tests**
+- [x] **Step 6: Write and run concurrency tests**
 
 Create two tests:
 
@@ -917,7 +917,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS within 30 seconds per test.
 
-- [ ] **Step 7: Run legacy inventory and lottery concurrency tests**
+- [x] **Step 7: Run legacy inventory and lottery concurrency tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -926,7 +926,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS; legacy lottery activity stock is unaffected.
 
-- [ ] **Step 8: Commit inventory services**
+- [x] **Step 8: Commit inventory services**
 
 ```powershell
 git add -- src/main/java/com/dongqh/luckyhub/inventory/channel `
@@ -934,6 +934,8 @@ git add -- src/main/java/com/dongqh/luckyhub/inventory/channel `
   src/test/java/com/dongqh/luckyhub/inventory/ChannelInventoryConcurrencyTests.java
 git commit -m "feat: manage idempotent channel inventory"
 ```
+
+**完成介绍：** [阶段 1 · 任务 6：幂等渠道库存服务完成介绍](../../progress/阶段1-任务6-幂等渠道库存服务完成介绍.md)
 
 ## Task 7: Expose channel inventory management API
 

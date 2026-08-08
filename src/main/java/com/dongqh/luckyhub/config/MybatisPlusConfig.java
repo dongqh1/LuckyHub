@@ -17,7 +17,8 @@ import org.springframework.context.annotation.Configuration;
         "com.dongqh.luckyhub.inventory.mapper",
         "com.dongqh.luckyhub.benefit.mapper",
         "com.dongqh.luckyhub.catalog.mapper",
-        "com.dongqh.luckyhub.reward.mapper"
+        "com.dongqh.luckyhub.reward.mapper",
+        "com.dongqh.luckyhub.inventory.channel.mapper"
 })
 public class MybatisPlusConfig {
 
