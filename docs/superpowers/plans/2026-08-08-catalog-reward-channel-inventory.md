@@ -584,7 +584,7 @@ git commit -m "feat: manage catalog products"
 - Consumes: `RewardDefinitionMapper`, `ProductSkuMapper`, and `PermissionCodes.REWARD_MANAGE`.
 - Produces: `RewardDefinitionService.create`, `RewardDefinitionService.get`, `POST /api/admin/reward-definitions`, and `GET /api/admin/reward-definitions/{id}`.
 
-- [ ] **Step 1: Define the command and invariant tests**
+- [x] **Step 1: Define the command and invariant tests**
 
 Create:
 
@@ -608,7 +608,7 @@ Service invariants:
 
 Use `ObjectMapper.readTree` only for validation; store the normalized JSON string returned by `writeValueAsString(readTree(value))`.
 
-- [ ] **Step 2: Write failing service tests**
+- [x] **Step 2: Write failing service tests**
 
 Cover one successful definition for all five reward types, invalid target combinations, missing SKU, disabled SKU, duplicate code, blank JSON normalization, and malformed JSON.
 
@@ -621,7 +621,7 @@ REWARD_TARGET_INVALID(45003, "奖励目标不合法", HttpStatus.BAD_REQUEST),
 REWARD_CONFIG_INVALID(45004, "奖励配置不合法", HttpStatus.BAD_REQUEST)
 ```
 
-- [ ] **Step 3: Implement service and view**
+- [x] **Step 3: Implement service and view**
 
 Use:
 
@@ -634,7 +634,7 @@ public interface RewardDefinitionService {
 
 The returned view includes `id`, code, name, type, target ID, quantity, normalized config JSON, status, and timestamps. No method in this task attaches rewards to activities.
 
-- [ ] **Step 4: Run reward service tests**
+- [x] **Step 4: Run reward service tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -643,11 +643,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 5: Add and test admin endpoints**
+- [x] **Step 5: Add and test admin endpoints**
 
 Create `POST /api/admin/reward-definitions` and `GET /api/admin/reward-definitions/{id}`, both protected by `reward:manage`. Test 201, get-by-id, validation error, 401, and 403 behavior.
 
-- [ ] **Step 6: Run reward API tests and commit**
+- [x] **Step 6: Run reward API tests and commit**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -658,6 +658,8 @@ git commit -m "feat: manage reward definitions"
 ```
 
 Expected: tests PASS before the commit is created.
+
+**完成介绍：** [阶段 1 · 任务 4：统一奖励定义管理完成介绍](../../progress/阶段1-任务4-统一奖励定义管理完成介绍.md)
 
 ## Task 5: Add V9 channel inventory schema and contracts
 
