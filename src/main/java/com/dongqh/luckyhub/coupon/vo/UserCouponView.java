@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.coupon.vo; import com.dongqh.luckyhub.coupon.enums.UserCouponStatus; import java.time.LocalDateTime; public record UserCouponView(Long id,String couponNo,Long templateId,Long userId,UserCouponStatus status,LocalDateTime validFrom,LocalDateTime validUntil,String lockedOrderNo,String usedOrderNo) {}

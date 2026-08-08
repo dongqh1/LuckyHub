@@ -36,11 +36,11 @@
 
 **Interfaces:** `CouponService.createTemplate`, `issue`, `pageMine`, `lockForOrder`, `useForOrder`, `releaseForOrder`, `expireAvailable`.
 
-- [ ] Write failing service and concurrency tests for template validation, per-user issue limit, product scope, validity, lock/use/release/expire, idempotency and two orders racing for one coupon.
-- [ ] Run `'-Dtest=CouponServiceTests,CouponConcurrencyTests' test` and verify RED.
-- [ ] Implement conditional mapper updates and transactional service; never edit used/expired history.
-- [ ] Run coupon tests GREEN and related schema regression.
-- [ ] Document a `满100减20` coupon locked by order A while order B is rejected; commit `feat: manage coupon assets`.
+- [x] Write failing service and concurrency tests for template validation, per-user issue limit, product scope, validity, lock/use/release/expire, idempotency and two orders racing for one coupon.
+- [x] Run `'-Dtest=CouponServiceTests,CouponConcurrencyTests' test` and verify RED.
+- [x] Implement conditional mapper updates and transactional service; never edit used/expired history.
+- [x] Run coupon tests GREEN and related schema regression.
+- [x] Document a `满100减20` coupon locked by order A while order B is rejected; commit `feat: manage coupon assets`.
 
 ## Task 3: Implement renewable membership
 

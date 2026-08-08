@@ -1,0 +1,1 @@
+package com.dongqh.luckyhub.coupon.dto; import jakarta.validation.constraints.*; public record IssueCouponCommand(@NotBlank @Size(max=64) String businessNo,@NotBlank @Size(max=64) String couponNo,@NotNull @Positive Long templateId,@NotNull @Positive Long userId) {}
