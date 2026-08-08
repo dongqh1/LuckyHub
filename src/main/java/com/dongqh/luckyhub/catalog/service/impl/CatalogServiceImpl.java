@@ -9,6 +9,7 @@ import com.dongqh.luckyhub.catalog.entity.ProductSku;
 import com.dongqh.luckyhub.catalog.enums.ProductErrorCode;
 import com.dongqh.luckyhub.catalog.mapper.ProductMapper;
 import com.dongqh.luckyhub.catalog.mapper.ProductSkuMapper;
+import com.dongqh.luckyhub.catalog.model.RedeemableSkuSnapshot;
 import com.dongqh.luckyhub.catalog.service.CatalogService;
 import com.dongqh.luckyhub.catalog.vo.ProductView;
 import com.dongqh.luckyhub.catalog.vo.SkuView;
@@ -22,6 +23,7 @@ import org.springframework.util.StringUtils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -98,6 +100,24 @@ public class CatalogServiceImpl implements CatalogService {
                 .map(product -> toView(product, skusByProduct.getOrDefault(product.getId(), List.of())))
                 .toList();
         return new PageResponse<>(records, result.getTotal(), result.getCurrent(), result.getSize(), result.getPages());
+    }
+
+    @Override
+    public Optional<RedeemableSkuSnapshot> findRedeemableSku(long skuId) {
+        ProductSku sku = skuMapper.selectById(skuId);
+        if (sku == null || !Integer.valueOf(ENABLED).equals(sku.getStatus())
+                || !Boolean.TRUE.equals(sku.getPointsEnabled())
+                || sku.getPointsPrice() == null || sku.getPointsPrice() <= 0) {
+            return Optional.empty();
+        }
+        Product product = productMapper.selectById(sku.getProductId());
+        if (product == null || !Integer.valueOf(ENABLED).equals(product.getStatus())) {
+            return Optional.empty();
+        }
+        return Optional.of(new RedeemableSkuSnapshot(
+                sku.getId(), product.getProductCode(), product.getProductName(),
+                sku.getSkuCode(), sku.getSkuName(), product.getProductType(),
+                product.getImageUrl(), sku.getPointsPrice()));
     }
 
     private List<ProductSku> findEnabledSkus(long productId) {

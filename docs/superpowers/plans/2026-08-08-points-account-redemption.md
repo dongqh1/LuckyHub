@@ -764,6 +764,8 @@ git commit -m "feat: reverse confirmed channel inventory"
 
 ## Task 6: Implement atomic points redemption orchestration
 
+**完成介绍：** [阶段2-任务6-积分兑换事务完成介绍](../../progress/阶段2-任务6-积分兑换事务完成介绍.md)
+
 **Files:**
 - Create: `src/main/java/com/dongqh/luckyhub/catalog/model/RedeemableSkuSnapshot.java`
 - Modify: `src/main/java/com/dongqh/luckyhub/catalog/service/CatalogService.java`
@@ -779,7 +781,7 @@ git commit -m "feat: reverse confirmed channel inventory"
 - Consumes: `CatalogService.findRedeemableSku`, `PointsAccountService`, and `ChannelInventoryService`.
 - Produces: user-owned idempotent redemption creation/query and admin compensation.
 
-- [ ] **Step 1: Define the catalog snapshot and service contract**
+- [x] **Step 1: Define the catalog snapshot and service contract**
 
 ```java
 public record RedeemableSkuSnapshot(
@@ -798,7 +800,7 @@ Optional<RedeemableSkuSnapshot> findRedeemableSku(long skuId);
 
 The catalog implementation returns empty unless the product and SKU are enabled, `pointsEnabled == true`, and `pointsPrice > 0`. It exposes no inventory and does not depend on the `points` package. `PointsRedemptionServiceImpl` converts empty to `REDEMPTION_SKU_UNAVAILABLE`.
 
-- [ ] **Step 2: Define redemption commands and service interface**
+- [x] **Step 2: Define redemption commands and service interface**
 
 ```java
 public record CreatePointsRedemptionCommand(
@@ -820,7 +822,7 @@ public interface PointsRedemptionService {
 }
 ```
 
-- [ ] **Step 3: Write failing redemption service tests**
+- [x] **Step 3: Write failing redemption service tests**
 
 Cover:
 
@@ -841,7 +843,7 @@ same reversalNo repeats idempotently
 different reversalNo or non-COMPLETED order -> 47008
 ```
 
-- [ ] **Step 4: Run tests and verify RED**
+- [x] **Step 4: Run tests and verify RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -850,7 +852,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because orchestration does not exist.
 
-- [ ] **Step 5: Implement claim-first creation in one transaction**
+- [x] **Step 5: Implement claim-first creation in one transaction**
 
 Use `@Transactional(isolation = Isolation.READ_COMMITTED)` and this exact order:
 
@@ -870,7 +872,7 @@ normalize redemptionNo
 
 Any exception must roll back the order, points ledger/account, inventory reservation/ledger, and channel quantities together.
 
-- [ ] **Step 6: Implement atomic compensation**
+- [x] **Step 6: Implement atomic compensation**
 
 In one transaction:
 
@@ -885,7 +887,7 @@ lock redemption by redemptionNo
 
 Never delete the redemption debit, reservation, or original order.
 
-- [ ] **Step 7: Add concurrent duplicate redemption tests**
+- [x] **Step 7: Add concurrent duplicate redemption tests**
 
 Twenty simultaneous calls with one redemption number must result in:
 
@@ -899,7 +901,7 @@ one unit consumed
 all callers observe the same order id and COMPLETED status
 ```
 
-- [ ] **Step 8: Run redemption, account, and inventory tests**
+- [x] **Step 8: Run redemption, account, and inventory tests**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -908,7 +910,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS.
 
-- [ ] **Step 9: Write the task introduction and commit**
+- [x] **Step 9: Write the task introduction and commit**
 
 Explain a 3000-point single-SKU exchange, atomic rollback on insufficient stock, duplicate request behavior, snapshots, and later reversal.
 
