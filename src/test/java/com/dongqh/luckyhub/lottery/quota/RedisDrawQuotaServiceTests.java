@@ -34,7 +34,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RedisDrawQuotaServiceTests {
 
     private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
-    private static final Instant FIXED_NOW = Instant.parse("2026-07-31T15:59:00Z");
+    private static final LocalDate FIXED_DATE = LocalDate.now(SHANGHAI);
+    private static final Instant FIXED_NOW = FIXED_DATE.atTime(23, 59)
+            .atZone(SHANGHAI).toInstant();
 
     @Autowired
     private StringRedisTemplate redisTemplate;
@@ -128,14 +130,14 @@ class RedisDrawQuotaServiceTests {
         RedisDrawQuotaService nextDayService = new RedisDrawQuotaService(
                 redisTemplate,
                 properties,
-                Clock.fixed(Instant.parse("2026-07-31T16:01:00Z"), SHANGHAI)
+                Clock.fixed(FIXED_NOW.plus(Duration.ofMinutes(2)), SHANGHAI)
         );
 
         QuotaReservationResult duplicate = nextDayService.reserve(original);
 
         assertThat(duplicate.duplicate()).isTrue();
-        assertThat(duplicate.drawDate()).isEqualTo(LocalDate.of(2026, 7, 31));
-        String nextDayQuota = DrawQuotaKeys.quota(activityId, userId, LocalDate.of(2026, 8, 1));
+        assertThat(duplicate.drawDate()).isEqualTo(FIXED_DATE);
+        String nextDayQuota = DrawQuotaKeys.quota(activityId, userId, FIXED_DATE.plusDays(1));
         quotaKeys.add(nextDayQuota);
         assertThat(redisTemplate.hasKey(nextDayQuota)).isFalse();
     }
@@ -149,16 +151,16 @@ class RedisDrawQuotaServiceTests {
         RedisDrawQuotaService nextDayService = new RedisDrawQuotaService(
                 redisTemplate,
                 properties,
-                Clock.fixed(Instant.parse("2026-07-31T16:01:00Z"), SHANGHAI)
+                Clock.fixed(FIXED_NOW.plus(Duration.ofMinutes(2)), SHANGHAI)
         );
 
         QuotaReservationResult duplicate = nextDayService.reserve(
                 request(requestId, activityId, userId, 1, 99));
 
         assertThat(duplicate.duplicate()).isTrue();
-        assertThat(duplicate.drawDate()).isEqualTo(LocalDate.of(2026, 7, 31));
+        assertThat(duplicate.drawDate()).isEqualTo(FIXED_DATE);
         assertThat(redisTemplate.opsForValue().get(quotaKey(activityId, userId))).isEqualTo("1");
-        String nextDayQuota = DrawQuotaKeys.quota(activityId, userId, LocalDate.of(2026, 8, 1));
+        String nextDayQuota = DrawQuotaKeys.quota(activityId, userId, FIXED_DATE.plusDays(1));
         quotaKeys.add(nextDayQuota);
         assertThat(redisTemplate.hasKey(nextDayQuota)).isFalse();
     }
@@ -176,7 +178,7 @@ class RedisDrawQuotaServiceTests {
         assertThat(reservation).containsEntry("userId", Long.toString(userId))
                 .containsEntry("activityId", Long.toString(activityId))
                 .containsEntry("drawCount", "1")
-                .containsEntry("drawDate", "20260731")
+                .containsEntry("drawDate", FIXED_DATE.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE))
                 .containsEntry("status", "RESERVED")
                 .containsEntry("createdAt", Long.toString(FIXED_NOW.toEpochMilli()));
         assertThat(redisTemplate.opsForZSet().score(DrawQuotaKeys.reservationTimeouts(), requestId))
@@ -184,7 +186,7 @@ class RedisDrawQuotaServiceTests {
 
         Long reservationTtl = redisTemplate.getExpire(reservationKey, TimeUnit.MILLISECONDS);
         Long quotaTtl = redisTemplate.getExpire(quotaKey(activityId, userId), TimeUnit.MILLISECONDS);
-        long expiresAt = LocalDate.of(2026, 7, 31).atStartOfDay(SHANGHAI).toInstant()
+        long expiresAt = FIXED_DATE.atStartOfDay(SHANGHAI).toInstant()
                 .plus(properties.reservationRetention()).toEpochMilli();
         long expected = expiresAt - Instant.now().toEpochMilli();
         assertThat(reservationTtl).isBetween(expected - 5_000, expected + 1_000);
@@ -326,7 +328,7 @@ class RedisDrawQuotaServiceTests {
     }
 
     private String quotaKey(long activityId, long userId) {
-        return DrawQuotaKeys.quota(activityId, userId, LocalDate.of(2026, 7, 31));
+        return DrawQuotaKeys.quota(activityId, userId, FIXED_DATE);
     }
 
     private String status(String requestId) {
