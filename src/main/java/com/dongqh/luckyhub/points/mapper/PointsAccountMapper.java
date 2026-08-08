@@ -9,11 +9,12 @@ import org.apache.ibatis.annotations.Update;
 public interface PointsAccountMapper extends BaseMapper<PointsAccount> {
 
     @Insert("""
-            INSERT IGNORE INTO points_account (
+            INSERT INTO points_account (
                 user_id, balance, version, created_at, updated_at
             ) VALUES (
                 #{userId}, 0, 0, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)
             )
+            ON DUPLICATE KEY UPDATE user_id = #{userId}
             """)
     int ensureAccount(@Param("userId") long userId);
 

@@ -598,6 +598,8 @@ git commit -m "feat: manage idempotent points balances"
 
 ## Task 4: Prove points concurrency safety
 
+**完成介绍：** [阶段2-任务4-积分并发安全完成介绍](../../progress/阶段2-任务4-积分并发安全完成介绍.md)
+
 **Files:**
 - Create: `src/test/java/com/dongqh/luckyhub/points/PointsAccountConcurrencyTests.java`
 - Modify implementation only if the failing concurrency test identifies a real defect.
@@ -607,7 +609,7 @@ git commit -m "feat: manage idempotent points balances"
 - Consumes: `PointsAccountService` from Task 3.
 - Produces: executable proof that balances and idempotency remain correct under contention.
 
-- [ ] **Step 1: Write two concurrency tests**
+- [x] **Step 1: Write two concurrency tests**
 
 Test A:
 
@@ -633,7 +635,7 @@ exactly one debit ledger row
 
 Use `CountDownLatch` to release threads together and collect results with a bounded executor.
 
-- [ ] **Step 2: Run and verify the tests fail if concurrency handling is incomplete**
+- [x] **Step 2: Run and verify the tests fail if concurrency handling is incomplete**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -642,7 +644,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS if Task 3 is correct; if FAIL, preserve the test and debug the root cause before changing code.
 
-- [ ] **Step 3: Run the concurrency tests repeatedly**
+- [x] **Step 3: Run the concurrency tests repeatedly**
 
 ```powershell
 1..5 | ForEach-Object {
@@ -654,7 +656,7 @@ Expected: PASS if Task 3 is correct; if FAIL, preserve the test and debug the ro
 
 Expected: all five runs PASS.
 
-- [ ] **Step 4: Write the task introduction and commit**
+- [x] **Step 4: Write the task introduction and commit**
 
 Explain conditional debit using a “40 people spend 17 points” example and duplicate-request convergence.
 
