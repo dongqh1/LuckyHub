@@ -14,4 +14,11 @@ public interface InventoryReservationMapper extends BaseMapper<InventoryReservat
             """)
     int transitionReserved(@Param("reservationNo") String reservationNo,
                            @Param("targetStatus") InventoryReservationStatus targetStatus);
+
+    @Update("""
+            UPDATE inventory_reservation
+            SET status = 'REVERSED', updated_at = CURRENT_TIMESTAMP(3)
+            WHERE reservation_no = #{reservationNo} AND status = 'CONFIRMED'
+            """)
+    int reverseConfirmed(@Param("reservationNo") String reservationNo);
 }

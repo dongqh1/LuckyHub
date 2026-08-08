@@ -139,6 +139,37 @@ public class ChannelInventoryServiceImpl implements ChannelInventoryService {
     }
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ChannelInventoryView reverseConfirmed(String rawReservationNo) {
+        String reservationNo = rawReservationNo.trim();
+        InventoryReservation reservation = requireReservation(reservationNo);
+        if (reservation.getStatus() == InventoryReservationStatus.REVERSED) {
+            return view(reservation);
+        }
+        if (reservation.getStatus() != InventoryReservationStatus.CONFIRMED) {
+            throw error(ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+        }
+
+        if (!claimLedger("RETURN:" + reservationNo, reservation.getSkuId(),
+                reservation.getChannelCode(), InventoryOperation.RETURN, reservation.getQuantity())) {
+            return view(requireReservation(reservationNo));
+        }
+        if (reservationMapper.reverseConfirmed(reservationNo) != 1) {
+            InventoryReservation winner = requireReservation(reservationNo);
+            if (winner.getStatus() == InventoryReservationStatus.REVERSED) {
+                return view(winner);
+            }
+            throw error(ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+        }
+        if (channelMapper.reverseConsumed(reservation.getSkuId(), reservation.getChannelCode(),
+                reservation.getQuantity()) != 1) {
+            throw error(ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+        }
+        reservation.setStatus(InventoryReservationStatus.REVERSED);
+        return view(reservation);
+    }
+
+    @Override
     public ChannelInventoryView get(long skuId, String channelCode) {
         SkuInventory total = requireTotal(skuId);
         InventoryChannelStock channel = requireChannel(skuId, normalizeChannel(channelCode));

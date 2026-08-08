@@ -5,5 +5,6 @@ public enum InventoryOperation {
     ALLOCATE,
     RESERVE,
     CONFIRM,
-    RELEASE
+    RELEASE,
+    RETURN
 }

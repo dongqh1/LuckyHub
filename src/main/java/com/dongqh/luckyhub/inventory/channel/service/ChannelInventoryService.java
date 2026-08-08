@@ -11,5 +11,6 @@ public interface ChannelInventoryService {
     ChannelInventoryView reserve(ReserveChannelStockCommand command);
     ChannelInventoryView confirm(String reservationNo);
     ChannelInventoryView release(String reservationNo);
+    ChannelInventoryView reverseConfirmed(String reservationNo);
     ChannelInventoryView get(long skuId, String channelCode);
 }

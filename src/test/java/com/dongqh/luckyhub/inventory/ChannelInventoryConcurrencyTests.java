@@ -10,7 +10,9 @@ import com.dongqh.luckyhub.inventory.channel.dto.AllocateChannelStockCommand;
 import com.dongqh.luckyhub.inventory.channel.dto.InitializeSkuStockCommand;
 import com.dongqh.luckyhub.inventory.channel.dto.ReserveChannelStockCommand;
 import com.dongqh.luckyhub.inventory.channel.enums.ChannelInventoryErrorCode;
+import com.dongqh.luckyhub.inventory.channel.enums.InventoryReservationStatus;
 import com.dongqh.luckyhub.inventory.channel.service.ChannelInventoryService;
+import com.dongqh.luckyhub.inventory.channel.vo.ChannelInventoryView;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -126,6 +128,40 @@ class ChannelInventoryConcurrencyTests {
             assertThat(inventory.reservedStock()).isEqualTo(1);
             assertThat(count("inventory_reservation", "reservation_no", "SAME-RES")).isEqualTo(1);
             assertThat(count("inventory_ledger", "business_no", "RESERVE:SAME-RES")).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void twentyConcurrentConfirmedReversalsRestoreConsumedStockOnce() {
+        assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+            long skuId = initializedAndAllocatedSku(20, 10);
+            service.reserve(new ReserveChannelStockCommand(
+                    skuId, "MALL", 1, "SAME-RETURN"));
+            service.confirm("SAME-RETURN");
+            CountDownLatch ready = new CountDownLatch(20);
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<ChannelInventoryView>> futures = new ArrayList<>();
+
+            for (int i = 0; i < 20; i++) {
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+                    return service.reverseConfirmed("SAME-RETURN");
+                }));
+            }
+
+            assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            for (Future<ChannelInventoryView> future : futures) {
+                assertThat(future.get().reservationStatus())
+                        .isEqualTo(InventoryReservationStatus.REVERSED);
+            }
+
+            var inventory = service.get(skuId, "MALL");
+            assertThat(inventory.availableStock()).isEqualTo(10);
+            assertThat(inventory.reservedStock()).isZero();
+            assertThat(inventory.consumedStock()).isZero();
+            assertThat(count("inventory_ledger", "business_no", "RETURN:SAME-RETURN")).isEqualTo(1);
         });
     }
 

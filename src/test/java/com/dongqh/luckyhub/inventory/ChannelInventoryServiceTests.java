@@ -119,6 +119,47 @@ class ChannelInventoryServiceTests {
     }
 
     @Test
+    void reversesConfirmedConsumptionExactlyOnce() {
+        long skuId = initializedSku(20);
+        service.allocate(new AllocateChannelStockCommand(skuId, "POINTS", 10, "ALLOC-RETURN"));
+        service.reserve(new ReserveChannelStockCommand(skuId, "POINTS", 4, "RES-RETURN"));
+        service.confirm("RES-RETURN");
+
+        var reversed = service.reverseConfirmed("RES-RETURN");
+        var repeated = service.reverseConfirmed("RES-RETURN");
+
+        assertThat(reversed.availableStock()).isEqualTo(10);
+        assertThat(reversed.reservedStock()).isZero();
+        assertThat(reversed.consumedStock()).isZero();
+        assertThat(reversed.reservationStatus()).isEqualTo(InventoryReservationStatus.REVERSED);
+        assertThat(repeated).isEqualTo(reversed);
+        assertThat(countLedger("RETURN:RES-RETURN")).isEqualTo(1);
+    }
+
+    @Test
+    void reversesOnlyConfirmedReservationsAndKeepsTerminalStatesClosed() {
+        long skuId = initializedSku(20);
+        service.allocate(new AllocateChannelStockCommand(skuId, "POINTS", 10, "ALLOC-STATES"));
+
+        service.reserve(new ReserveChannelStockCommand(skuId, "POINTS", 1, "RES-STILL-RESERVED"));
+        assertError(() -> service.reverseConfirmed("RES-STILL-RESERVED"),
+                ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+
+        service.reserve(new ReserveChannelStockCommand(skuId, "POINTS", 1, "RES-ALREADY-RELEASED"));
+        service.release("RES-ALREADY-RELEASED");
+        assertError(() -> service.reverseConfirmed("RES-ALREADY-RELEASED"),
+                ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+
+        service.reserve(new ReserveChannelStockCommand(skuId, "POINTS", 1, "RES-ALREADY-REVERSED"));
+        service.confirm("RES-ALREADY-REVERSED");
+        service.reverseConfirmed("RES-ALREADY-REVERSED");
+        assertError(() -> service.confirm("RES-ALREADY-REVERSED"),
+                ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+        assertError(() -> service.release("RES-ALREADY-REVERSED"),
+                ChannelInventoryErrorCode.INVENTORY_STATE_CONFLICT);
+    }
+
+    @Test
     void returnsStableErrorsForInsufficientAndMissingInventory() {
         long skuId = initializedSku(5);
 

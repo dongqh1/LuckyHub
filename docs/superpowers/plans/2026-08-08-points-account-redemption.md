@@ -672,6 +672,8 @@ git commit -m "test: prove points concurrency safety"
 
 ## Task 5: Add confirmed inventory reversal
 
+**完成介绍：** [阶段2-任务5-已确认库存反向恢复完成介绍](../../progress/阶段2-任务5-已确认库存反向恢复完成介绍.md)
+
 **Files:**
 - Modify: `src/main/java/com/dongqh/luckyhub/inventory/channel/enums/InventoryOperation.java`
 - Modify: `src/main/java/com/dongqh/luckyhub/inventory/channel/enums/InventoryReservationStatus.java`
@@ -686,7 +688,7 @@ git commit -m "test: prove points concurrency safety"
 - Consumes: V10 CHECK constraints.
 - Produces: `ChannelInventoryService.reverseConfirmed(String reservationNo)` for atomic redemption compensation.
 
-- [ ] **Step 1: Write failing reversal tests**
+- [x] **Step 1: Write failing reversal tests**
 
 Required behavior:
 
@@ -703,7 +705,7 @@ REVERSED -> confirm/release is rejected with 46003
 20 concurrent reverse calls create one RETURN ledger and restore once
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -712,7 +714,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: FAIL because `REVERSED`, `RETURN`, and `reverseConfirmed` do not exist.
 
-- [ ] **Step 3: Add the atomic mapper update**
+- [x] **Step 3: Add the atomic mapper update**
 
 ```java
 @Update("""
@@ -726,7 +728,7 @@ Expected: FAIL because `REVERSED`, `RETURN`, and `reverseConfirmed` do not exist
 int reverseConsumed(long skuId, String channelCode, int quantity);
 ```
 
-- [ ] **Step 4: Extend the state transition without weakening old rules**
+- [x] **Step 4: Extend the state transition without weakening old rules**
 
 Add `RETURN` and `REVERSED`. Implement:
 
@@ -736,7 +738,7 @@ ChannelInventoryView reverseConfirmed(String reservationNo);
 
 The method must require `CONFIRMED`, claim `RETURN:{reservationNo}`, conditionally transition the reservation, call `reverseConsumed`, and return the new view in one `READ_COMMITTED` transaction. Existing `confirm` and `release` continue accepting only `RESERVED`.
 
-- [ ] **Step 5: Run new and old inventory/lottery regression**
+- [x] **Step 5: Run new and old inventory/lottery regression**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
@@ -745,7 +747,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
 
 Expected: PASS. Existing HTTP inventory API does not expose reversal; only the points orchestration consumes it in this phase.
 
-- [ ] **Step 6: Write the task introduction and commit**
+- [x] **Step 6: Write the task introduction and commit**
 
 Use an example where a completed 3000-point redemption later fails and one consumed item returns to `POINTS` availability. Contrast `RELEASED` with `REVERSED`.
 
