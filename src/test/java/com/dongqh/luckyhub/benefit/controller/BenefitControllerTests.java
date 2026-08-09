@@ -9,6 +9,8 @@ import com.dongqh.luckyhub.auth.model.LoginPrincipal;
 import com.dongqh.luckyhub.common.result.PageResponse;
 import com.dongqh.luckyhub.common.web.GlobalExceptionHandler;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
+import com.dongqh.luckyhub.reward.enums.RewardType;
+import com.dongqh.luckyhub.fulfillment.enums.FulfillmentStatus;
 import com.dongqh.luckyhub.rbac.annotation.RequirePermission;
 import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
 import com.dongqh.luckyhub.rbac.interceptor.PermissionInterceptor;
@@ -53,12 +55,16 @@ class BenefitControllerTests {
     @Test
     void exposesBenefitListAndDetail() throws Exception {
         BenefitView view = new BenefitView(3L, 4L, 5L, 6L, PrizeType.COUPON, "咖啡券",
-                "https://cdn/prize.png", 1, BenefitStatus.AVAILABLE, LocalDateTime.now(), null);
+                "https://cdn/prize.png", 1, BenefitStatus.AVAILABLE, LocalDateTime.now(), null,
+                7L, RewardType.COUPON, 2L, "LOTTERY-BENEFIT-3", FulfillmentStatus.SUCCEEDED);
         when(service.page(any())).thenReturn(new PageResponse<>(List.of(view), 1, 1, 20, 1));
         when(service.getById(3L)).thenReturn(view);
 
         mockMvc.perform(get("/api/benefits"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].prizeName").value("咖啡券"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.records[0].prizeName").value("咖啡券"))
+                .andExpect(jsonPath("$.data.records[0].rewardType").value("COUPON"))
+                .andExpect(jsonPath("$.data.records[0].rewardQuantity").value(2))
+                .andExpect(jsonPath("$.data.records[0].fulfillmentStatus").value("SUCCEEDED"));
         mockMvc.perform(get("/api/benefits/3"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(3));
     }

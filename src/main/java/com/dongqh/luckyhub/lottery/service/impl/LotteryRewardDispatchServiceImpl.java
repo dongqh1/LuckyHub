@@ -62,15 +62,18 @@ public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchSe
     @Transactional
     public void dispatch(DrawEventEnvelope envelope, PrizeFulfillmentRequestedEvent payload) {
         String eventId = envelope.eventId().toString();
-        if (alreadyConsumed(eventId)) return;
         ValidatedLotteryReward reward;
         try {
             reward = identities.validate(envelope, payload);
         } catch (RewardIdentityMismatchException mismatch) {
+            if (alreadyConsumed(eventId)) return;
             quarantine(envelope, payload, mismatch);
             recordConsumed(eventId);
             return;
         }
+        // Identity validation locks the benefit row. Recheck after that lock so concurrent
+        // deliveries serialize before creating a task or writing any reward side effect.
+        if (alreadyConsumed(eventId)) return;
         if (reward.rewardSnapshot() == null) {
             legacyFulfillment.fulfill(reward.benefitId(), eventId);
             return;

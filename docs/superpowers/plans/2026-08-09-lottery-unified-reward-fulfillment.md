@@ -476,7 +476,7 @@ Use a two-coupon reward example showing deterministic business IDs and no duplic
 **Interfaces:**
 - `BenefitView` appends nullable `rewardDefinitionId`, `rewardType`, `rewardQuantity`, `fulfillmentNo`, and `fulfillmentStatus`; old fields and meanings remain unchanged.
 
-- [ ] **Step 1: Write the five real end-to-end scenarios**
+- [x] **Step 1: Write the five real end-to-end scenarios**
 
 For each reward, build an enabled activity with stock/weight forcing that win, execute the real draw, relay/consume the Outbox event, run Worker/projector where applicable, and assert:
 
@@ -490,15 +490,15 @@ DRAW_CHANCE -> draw_chance_ledger + account balance + AVAILABLE
 
 Repeat event delivery and projection; counts must stay unchanged.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=LotteryFiveRewardEndToEndTests,LotteryRewardConcurrencyTests,BenefitControllerTests' test`. Expected: incomplete query fields and/or missing end-to-end effects.
 
-- [ ] **Step 3: Add compatible query projection and API guide**
+- [x] **Step 3: Add compatible query projection and API guide**
 
 Left join fulfillment task by `fulfillment_no`; return null new fields for legacy benefits. Document reward configuration, state timelines, legacy behavior, identity quarantine, draw-chance use, PowerShell examples, and the explicit Phase 6 logistics boundary.
 
-- [ ] **Step 4: Run Phase 5 focused acceptance**
+- [x] **Step 4: Run Phase 5 focused acceptance**
 
 Run this exact command and record its test count in the task document:
 
@@ -506,7 +506,7 @@ Run this exact command and record its test count in the task document:
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest=RewardSnapshotServiceTests,PrizeRewardBindingTests,DrawRewardSnapshotTransactionTests,DrawChanceServiceTests,DrawChanceConcurrencyTests,RewardedDrawQuotaIntegrationTests,RewardedDrawRecoveryTests,LotteryRewardIdentityTests,LotteryRewardDispatchTests,LotteryRewardSafetyTests,LotteryRewardProjectionTests,LotteryRewardProjectionConcurrencyTests,LotteryFiveRewardEndToEndTests,LotteryRewardConcurrencyTests,LotteryEndToEndTests,FulfillmentEndToEndTests,CouponServiceTests,PointsAccountServiceTests,MembershipServiceTests' test
 ```
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 Explain all five timelines with examples. Commit `test: verify five lottery reward flows`.
 

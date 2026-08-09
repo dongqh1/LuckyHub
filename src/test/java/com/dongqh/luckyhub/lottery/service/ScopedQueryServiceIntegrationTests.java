@@ -7,6 +7,7 @@ import com.dongqh.luckyhub.benefit.dto.BenefitQuery;
 import com.dongqh.luckyhub.benefit.mapper.UserBenefitMapper;
 import com.dongqh.luckyhub.benefit.service.BenefitQueryServiceImpl;
 import com.dongqh.luckyhub.common.exception.ForbiddenException;
+import com.dongqh.luckyhub.fulfillment.mapper.FulfillmentTaskMapper;
 import com.dongqh.luckyhub.lottery.dto.DrawOrderQuery;
 import com.dongqh.luckyhub.lottery.dto.DrawRecordQuery;
 import com.dongqh.luckyhub.lottery.mapper.LotteryDrawOrderMapper;
@@ -37,6 +38,7 @@ class ScopedQueryServiceIntegrationTests {
     @Autowired LotteryDrawOrderMapper orderMapper;
     @Autowired LotteryDrawRecordMapper recordMapper;
     @Autowired UserBenefitMapper benefitMapper;
+    @Autowired FulfillmentTaskMapper fulfillmentTaskMapper;
     @Autowired MarketingActivityMapper activityMapper;
     @Autowired JdbcTemplate jdbc;
     private DataScopeService dataScope;
@@ -49,7 +51,7 @@ class ScopedQueryServiceIntegrationTests {
         marker = "task14-" + UUID.randomUUID();
         dataScope = mock(DataScopeService.class);
         lotteryQueries = new LotteryQueryServiceImpl(activityMapper, orderMapper, recordMapper, benefitMapper, dataScope);
-        benefitQueries = new BenefitQueryServiceImpl(benefitMapper, recordMapper, dataScope);
+        benefitQueries = new BenefitQueryServiceImpl(benefitMapper, recordMapper, fulfillmentTaskMapper, dataScope);
         LoginContext.set(new LoginPrincipal(SELF, "task14", "session"));
         deleteFixedTestUsers();
         seed(SELF, marker + "-self", 1);

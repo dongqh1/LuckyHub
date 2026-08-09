@@ -12,6 +12,8 @@ import com.dongqh.luckyhub.common.enums.CommonErrorCode;
 import com.dongqh.luckyhub.common.result.PageResponse;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawRecord;
 import com.dongqh.luckyhub.lottery.mapper.LotteryDrawRecordMapper;
+import com.dongqh.luckyhub.fulfillment.entity.FulfillmentTask;
+import com.dongqh.luckyhub.fulfillment.mapper.FulfillmentTaskMapper;
 import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
 import com.dongqh.luckyhub.rbac.service.DataScopeService;
 import com.dongqh.luckyhub.rbac.service.UserDataScope;
@@ -29,10 +31,13 @@ public class BenefitQueryServiceImpl implements BenefitQueryService {
     private static final LocalDate MYSQL_MIN_DATE=LocalDate.of(1000,1,1);
     private static final LocalDate MAX_SAFE_END_DATE=LocalDate.of(9999,12,30);
     private final UserBenefitMapper benefitMapper; private final LotteryDrawRecordMapper recordMapper;
+    private final FulfillmentTaskMapper fulfillmentTaskMapper;
     private final DataScopeService dataScopeService;
     public BenefitQueryServiceImpl(UserBenefitMapper benefitMapper, LotteryDrawRecordMapper recordMapper,
+                                   FulfillmentTaskMapper fulfillmentTaskMapper,
                                    DataScopeService dataScopeService) {
-        this.benefitMapper=benefitMapper; this.recordMapper=recordMapper; this.dataScopeService=dataScopeService;
+        this.benefitMapper=benefitMapper; this.recordMapper=recordMapper;
+        this.fulfillmentTaskMapper=fulfillmentTaskMapper; this.dataScopeService=dataScopeService;
     }
     @Override public PageResponse<BenefitView> page(BenefitQuery query) {
         validate(query);
@@ -46,7 +51,9 @@ public class BenefitQueryServiceImpl implements BenefitQueryService {
                 .orderByDesc(UserBenefit::getObtainedAt).orderByDesc(UserBenefit::getId);
         Page<UserBenefit> page=benefitMapper.selectPage(Page.of(query.getPage(),query.getSize()),wrapper);
         Map<Long,LotteryDrawRecord> records=records(page.getRecords());
-        List<BenefitView> views=page.getRecords().stream().map(b->toView(b,records.get(b.getDrawRecordId()))).toList();
+        Map<String,FulfillmentTask> tasks=tasks(page.getRecords());
+        List<BenefitView> views=page.getRecords().stream().map(b->toView(b,records.get(b.getDrawRecordId()),
+                b.getFulfillmentNo()==null?null:tasks.get(b.getFulfillmentNo()))).toList();
         return new PageResponse<>(views,page.getTotal(),page.getCurrent(),page.getSize(),page.getPages());
     }
     private void validate(BenefitQuery query){
@@ -62,16 +69,28 @@ public class BenefitQueryServiceImpl implements BenefitQueryService {
         UserBenefit benefit=benefitMapper.selectById(id);
         if(benefit==null) throw new BusinessException(BenefitErrorCode.BENEFIT_NOT_FOUND);
         dataScopeService.resolveUserScope(benefit.getUserId(),PermissionCodes.BENEFIT_READ_ALL);
-        return toView(benefit,recordMapper.selectById(benefit.getDrawRecordId()));
+        FulfillmentTask task=benefit.getFulfillmentNo()==null?null:fulfillmentTaskMapper.selectOne(
+                new LambdaQueryWrapper<FulfillmentTask>().eq(FulfillmentTask::getFulfillmentNo,benefit.getFulfillmentNo()));
+        return toView(benefit,recordMapper.selectById(benefit.getDrawRecordId()),task);
     }
     private Map<Long,LotteryDrawRecord> records(List<UserBenefit> benefits){
         if(benefits.isEmpty()) return Map.of();
         return recordMapper.selectBatchIds(benefits.stream().map(UserBenefit::getDrawRecordId).toList()).stream()
                 .collect(Collectors.toMap(LotteryDrawRecord::getId,Function.identity()));
     }
-    private BenefitView toView(UserBenefit benefit,LotteryDrawRecord record){
+    private Map<String,FulfillmentTask> tasks(List<UserBenefit> benefits){
+        List<String> numbers=benefits.stream().map(UserBenefit::getFulfillmentNo)
+                .filter(Objects::nonNull).distinct().toList();
+        if(numbers.isEmpty())return Map.of();
+        return fulfillmentTaskMapper.selectList(new LambdaQueryWrapper<FulfillmentTask>()
+                        .in(FulfillmentTask::getFulfillmentNo,numbers)).stream()
+                .collect(Collectors.toMap(FulfillmentTask::getFulfillmentNo,Function.identity()));
+    }
+    private BenefitView toView(UserBenefit benefit,LotteryDrawRecord record,FulfillmentTask task){
         return new BenefitView(benefit.getId(),benefit.getDrawRecordId(),benefit.getUserId(),benefit.getPrizeId(),
                 benefit.getPrizeType(),record==null?null:record.getPrizeName(),record==null?null:record.getPrizeImageUrl(),
-                benefit.getQuantity(),benefit.getStatus(),benefit.getObtainedAt(),benefit.getExpireAt());
+                benefit.getQuantity(),benefit.getStatus(),benefit.getObtainedAt(),benefit.getExpireAt(),
+                benefit.getRewardDefinitionId(),benefit.getRewardType(),benefit.getRewardQuantity(),
+                benefit.getFulfillmentNo(),task==null?null:task.getStatus());
     }
 }

@@ -79,7 +79,10 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 [`docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md`](docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md) 和
 [`docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md`](docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md)。
 
-当前数据库迁移已到 V15。可运行产物使用以下命令生成和启动：
+阶段 5 抽奖统一奖励、五类奖励时间线、权益查询字段和幂等安全说明见
+[`docs/lottery-reward-fulfillment-api.md`](docs/lottery-reward-fulfillment-api.md)。
+
+当前数据库迁移已到 V16。可运行产物使用以下命令生成和启动：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'
