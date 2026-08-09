@@ -100,11 +100,11 @@ record GatewayResult(GatewayOutcome outcome, String externalReference, String er
 - Consumes the four Gateway ports and V15 tables.
 - Produces `SimulatorFailureRuleService.configure(type, mode, count)` and four `@Service` Gateway adapters.
 
-- [ ] Write failing integration tests for each provider success/query, duplicate execute idempotency, parameter conflict, 20-thread duplicate calls, retryable/permanent/unknown-before/unknown-after-success modes.
-- [ ] Run `'-Dtest=SimulatorGatewayTests,SimulatorConcurrencyTests' test`; verify RED.
-- [ ] Implement provider-owned persistence with SHA-256 request fingerprints, unique `fulfillment_no`, deterministic external references, atomic fault-rule consumption and safe messages.
-- [ ] Prove `UNKNOWN_AFTER_SUCCESS` persists one provider record before returning UNKNOWN, then query returns SUCCEEDED.
-- [ ] Run simulator tests GREEN, document coupon/points/member/logistics examples, check boxes and commit `feat: simulate fulfillment providers`.
+- [x] Write failing integration tests for each provider success/query, duplicate execute idempotency, parameter conflict, 20-thread duplicate calls, retryable/permanent/unknown-before/unknown-after-success modes.
+- [x] Run `'-Dtest=SimulatorGatewayTests,SimulatorConcurrencyTests' test`; verify RED.
+- [x] Implement provider-owned persistence with SHA-256 request fingerprints, unique `fulfillment_no`, deterministic external references, atomic fault-rule consumption and safe messages.
+- [x] Prove `UNKNOWN_AFTER_SUCCESS` persists one provider record before returning UNKNOWN, then query returns SUCCEEDED.
+- [x] Run simulator tests GREEN, document coupon/points/member/logistics examples, check boxes and commit `feat: simulate fulfillment providers`.
 
 Failure modes:
 
