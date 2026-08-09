@@ -38,6 +38,9 @@ public class UserBenefit {
     private String grantError;
     private LocalDateTime obtainedAt;
     private LocalDateTime expireAt;
+    private LocalDateTime claimDeadline;
+    private LocalDateTime claimedAt;
+    private Long shippingOrderId;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

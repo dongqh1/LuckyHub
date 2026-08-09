@@ -1,0 +1,22 @@
+package com.dongqh.luckyhub.shipping.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.dongqh.luckyhub.shipping.entity.ShippingOrder;
+import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+public interface ShippingOrderMapper extends BaseMapper<ShippingOrder> {
+    @Select("SELECT * FROM shipping_order WHERE source_type=#{type} AND source_id=#{sourceId} FOR UPDATE")
+    ShippingOrder lockBySource(@Param("type") ShippingSourceType type,
+                               @Param("sourceId") String sourceId);
+
+    @Select("SELECT * FROM shipping_order WHERE shipping_no=#{shippingNo} FOR UPDATE")
+    ShippingOrder lockByShippingNo(@Param("shippingNo") String shippingNo);
+
+    @Select("SELECT * FROM shipping_order WHERE waybill_no=#{waybillNo} FOR UPDATE")
+    ShippingOrder lockByWaybillNo(@Param("waybillNo") String waybillNo);
+
+    @Select("SELECT * FROM shipping_order WHERE claim_request_id=#{claimRequestId}")
+    ShippingOrder selectByClaimRequestId(@Param("claimRequestId") String claimRequestId);
+}

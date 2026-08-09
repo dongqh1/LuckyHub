@@ -84,7 +84,7 @@ class LotteryMigrationGuardTests {
                 versionFiveFlyway.repair();
                 versionFiveFlyway.migrate();
 
-                assertThat(versionFiveFlyway.info().current().getVersion().getVersion()).isEqualTo("16");
+                assertThat(versionFiveFlyway.info().current().getVersion().getVersion()).isEqualTo("17");
             } finally {
                 adminStatement.execute("DROP DATABASE IF EXISTS `" + schemaName + "`");
             }
