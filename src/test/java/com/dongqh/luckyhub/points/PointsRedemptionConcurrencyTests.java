@@ -113,7 +113,7 @@ class PointsRedemptionConcurrencyTests {
         Product product = new Product();
         product.setProductCode("PCR-P-" + suffix);
         product.setProductName("并发兑换商品");
-        product.setProductType(ProductType.PHYSICAL);
+        product.setProductType(ProductType.VIRTUAL);
         product.setStatus(1);
         productMapper.insert(product);
         ProductSku sku = new ProductSku();

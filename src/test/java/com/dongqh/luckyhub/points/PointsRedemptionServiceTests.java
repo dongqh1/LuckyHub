@@ -251,7 +251,7 @@ class PointsRedemptionServiceTests {
         Product product = new Product();
         product.setProductCode("P-" + suffix);
         product.setProductName("积分兑换商品");
-        product.setProductType(ProductType.PHYSICAL);
+        product.setProductType(ProductType.VIRTUAL);
         product.setImageUrl("https://cdn.example/original.png");
         product.setStatus(1);
         productMapper.insert(product);

@@ -33,6 +33,9 @@ public interface PointsRedemptionOrderMapper extends BaseMapper<PointsRedemption
             """)
     int completeProcessing(@Param("redemptionNo") String redemptionNo);
 
+    @Update("UPDATE points_redemption_order SET address_snapshot_id=#{snapshotId} WHERE id=#{id} AND address_snapshot_id IS NULL")
+    int attachAddressSnapshot(@Param("id") long id, @Param("snapshotId") long snapshotId);
+
     @Select("""
             SELECT * FROM points_redemption_order
             WHERE redemption_no = #{redemptionNo}
