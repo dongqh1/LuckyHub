@@ -420,15 +420,15 @@ public interface LotteryRewardProjectionService {
 }
 ```
 
-- [ ] **Step 1: Write failing projection tests**
+- [x] **Step 1: Write failing projection tests**
 
 For a `SUCCEEDED` task, assert coupon quantity N yields N deterministic user coupons/issue records, points yields one `LOTTERY_REWARD` ledger, membership quantity N yields N deterministic grant records and accumulated duration, and benefit becomes `AVAILABLE`. Prove repeated/concurrent projection has one set of effects. Prove provider quarantine/termination maps to safe `GRANT_FAILED`, later admin retry success recovers to `AVAILABLE`, and a local projection exception is retryable.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=LotteryRewardProjectionTests,LotteryRewardProjectionConcurrencyTests' test`. Expected: no local assets are created.
 
-- [ ] **Step 3: Implement one-benefit transactional projection**
+- [x] **Step 3: Implement one-benefit transactional projection**
 
 Lock the benefit, load its fulfillment task, deserialize its immutable reward payload by `rewardType`, then:
 
@@ -448,15 +448,15 @@ case MEMBERSHIP -> IntStream.rangeClosed(1, quantity).forEach(index ->
 
 All effect rows and the `AVAILABLE` transition must share one transaction. Bound quantity to 100 so generated IDs stay within schema limits and batches remain bounded.
 
-- [ ] **Step 4: Implement bounded scheduling and safe failures**
+- [x] **Step 4: Implement bounded scheduling and safe failures**
 
 Scan only `LOTTERY_BENEFIT` tasks joined to benefits in deterministic ID order, maximum configured batch 100. Catch per-benefit failures outside that benefit's transaction; store only `本地资产投影失败` and retry in a later poll.
 
-- [ ] **Step 5: Run GREEN and commerce regressions**
+- [x] **Step 5: Run GREEN and commerce regressions**
 
 Run focused tests plus `'-Dtest=CouponServiceTests,PointsAccountServiceTests,MembershipServiceTests,FulfillmentEndToEndTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Use a two-coupon reward example showing deterministic business IDs and no duplicates. Commit `feat: project fulfilled lottery assets`.
 

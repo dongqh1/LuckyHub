@@ -84,3 +84,5 @@ luckyhub:
     initial-delay: 60s
     batch-size: 50
     recovery-batch-size: 50
+    projection-interval: 5s
+    projection-initial-delay: 60s
