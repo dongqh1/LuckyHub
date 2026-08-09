@@ -156,11 +156,11 @@ record CreateFulfillmentTaskCommand(
 - `recordResult(claim, operation, result, duration)` validates the lease token and appends one attempt.
 - `FulfillmentWorker.runBatch()` calls Gateways outside a transaction.
 
-- [ ] Write failing tests proving only one of 20 claimers wins, stale lease tokens cannot complete, each success creates one attempt, and the Gateway observes `TransactionSynchronizationManager.isActualTransactionActive() == false`.
-- [ ] Run `'-Dtest=FulfillmentWorkerTests,FulfillmentLeaseConcurrencyTests' test`; verify RED.
-- [ ] Implement conditional SQL claims, random lease tokens, bounded batch processing, typed routing and short transactional state transitions.
-- [ ] Run worker/lease tests GREEN and relevant simulator regressions.
-- [ ] Document a two-Worker example, check boxes and commit `feat: execute fulfillment outside transactions`.
+- [x] Write failing tests proving only one of 20 claimers wins, stale lease tokens cannot complete, each success creates one attempt, and the Gateway observes `TransactionSynchronizationManager.isActualTransactionActive() == false`.
+- [x] Run `'-Dtest=FulfillmentWorkerTests,FulfillmentLeaseConcurrencyTests' test`; verify RED.
+- [x] Implement conditional SQL claims, random lease tokens, bounded batch processing, typed routing and short transactional state transitions.
+- [x] Run worker/lease tests GREEN and relevant simulator regressions.
+- [x] Document a two-Worker example, check boxes and commit `feat: execute fulfillment outside transactions`.
 
 ### Task 6: Retry, reconciliation, lease recovery and quarantine
 
