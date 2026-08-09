@@ -32,7 +32,10 @@ class SimulatorGatewayTests {
         GatewayResult coupon=couponGateway.execute(new CouponGrantRequest("C-"+suffix,1L,"NEW20",1));
         GatewayResult points=pointsGateway.execute(new PointsGrantRequest("P-"+suffix,1L,500,"奖励"));
         GatewayResult member=membershipGateway.execute(new MembershipGrantRequest("M-"+suffix,1L,"VIP",30));
-        GatewayResult logistics=logisticsGateway.execute(new LogisticsCreateRequest("L-"+suffix,1L,"SKU-1",1,"李*","139****1234","上海市浦东新区***"));
+        GatewayResult logistics=logisticsGateway.execute(new LogisticsCreateRequest(
+                "L-"+suffix,1L,99L,"SKU-1",1,"李四","13912341234",
+                "上海市","上海市","浦东新区","世纪大道1号",
+                "李*","139****1234","上海市浦东新区***"));
         assertThat(coupon.outcome()).isEqualTo(GatewayOutcome.SUCCEEDED);
         assertThat(points.outcome()).isEqualTo(GatewayOutcome.SUCCEEDED);
         assertThat(member.outcome()).isEqualTo(GatewayOutcome.SUCCEEDED);

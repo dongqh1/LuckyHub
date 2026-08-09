@@ -16,6 +16,11 @@ import com.dongqh.luckyhub.payment.enums.PaymentStatus;
 import com.dongqh.luckyhub.payment.mapper.PaymentOrderMapper;
 import com.dongqh.luckyhub.payment.service.PaymentService;
 import com.dongqh.luckyhub.payment.vo.PaymentView;
+import com.dongqh.luckyhub.catalog.enums.ProductType;
+import com.dongqh.luckyhub.shipping.enums.ShippingErrorCode;
+import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
+import com.dongqh.luckyhub.shipping.model.CreateShippingOrderCommand;
+import com.dongqh.luckyhub.shipping.service.ShippingOrderService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -38,13 +43,16 @@ public class PaymentServiceImpl implements PaymentService {
     private final MallOrderMapper orderMapper;
     private final ChannelInventoryService inventory;
     private final CouponService coupons;
+    private final ShippingOrderService shippingOrders;
 
     public PaymentServiceImpl(PaymentOrderMapper paymentMapper, MallOrderMapper orderMapper,
-                              ChannelInventoryService inventory, CouponService coupons) {
+                              ChannelInventoryService inventory, CouponService coupons,
+                              ShippingOrderService shippingOrders) {
         this.paymentMapper = paymentMapper;
         this.orderMapper = orderMapper;
         this.inventory = inventory;
         this.coupons = coupons;
+        this.shippingOrders = shippingOrders;
     }
 
     @Override
@@ -132,6 +140,18 @@ public class PaymentServiceImpl implements PaymentService {
         payment.setFailureReason(null);
         payment.setPaidAt(LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS));
         paymentMapper.updateById(payment);
+        if (order.getProductType() == ProductType.PHYSICAL) {
+            if (order.getAddressSnapshotId() == null) {
+                throw new BusinessException(ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+            }
+            var shipping = shippingOrders.create(new CreateShippingOrderCommand(
+                    ShippingSourceType.CASH_ORDER, String.valueOf(order.getId()), order.getUserId(),
+                    order.getAddressSnapshotId(), order.getSkuCode(), order.getProductName(),
+                    order.getImageUrl(), order.getQuantity(), null));
+            if (orderMapper.attachShippingOrder(order.getId(), shipping.id()) != 1) {
+                throw new BusinessException(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            }
+        }
         return view(payment);
     }
 

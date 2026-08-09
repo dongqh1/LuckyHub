@@ -5,5 +5,6 @@ public interface MallOrderMapper extends BaseMapper<MallOrder> {
  @Update("UPDATE mall_order SET status='PAID',paid_at=CURRENT_TIMESTAMP(3) WHERE order_no=#{orderNo} AND status='PENDING_PAYMENT'") int markPaid(@Param("orderNo") String orderNo);
  @Update("UPDATE mall_order SET status='CANCELLED',cancelled_at=CURRENT_TIMESTAMP(3),cancel_reason=#{reason} WHERE order_no=#{orderNo} AND status='PENDING_PAYMENT'") int cancel(@Param("orderNo") String orderNo,@Param("reason") String reason);
  @Update("UPDATE mall_order SET address_snapshot_id=#{snapshotId} WHERE id=#{id} AND address_snapshot_id IS NULL") int attachAddressSnapshot(@Param("id") long id,@Param("snapshotId") long snapshotId);
+ @Update("UPDATE mall_order SET shipping_order_id=#{shippingOrderId} WHERE id=#{id} AND shipping_order_id IS NULL") int attachShippingOrder(@Param("id") long id,@Param("shippingOrderId") long shippingOrderId);
  @Select("SELECT * FROM mall_order WHERE status='PENDING_PAYMENT' AND payment_deadline<=#{cutoff} ORDER BY id LIMIT #{limit}") List<MallOrder> findExpired(@Param("cutoff") LocalDateTime cutoff,@Param("limit") int limit);
 }

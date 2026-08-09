@@ -27,6 +27,8 @@ import com.dongqh.luckyhub.shipping.entity.ShippingAddressSnapshot;
 import com.dongqh.luckyhub.shipping.enums.ShippingErrorCode;
 import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
 import com.dongqh.luckyhub.shipping.service.ShippingAddressSnapshotService;
+import com.dongqh.luckyhub.shipping.service.ShippingOrderService;
+import com.dongqh.luckyhub.shipping.model.CreateShippingOrderCommand;
 import com.dongqh.luckyhub.shipping.vo.ShippingAddressSnapshotView;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -45,19 +47,22 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     private final ChannelInventoryService inventoryService;
     private final PointsRedemptionOrderMapper orderMapper;
     private final ShippingAddressSnapshotService snapshotService;
+    private final ShippingOrderService shippingOrderService;
 
     public PointsRedemptionServiceImpl(
             CatalogService catalogService,
             PointsAccountService accountService,
             ChannelInventoryService inventoryService,
             PointsRedemptionOrderMapper orderMapper,
-            ShippingAddressSnapshotService snapshotService
+            ShippingAddressSnapshotService snapshotService,
+            ShippingOrderService shippingOrderService
     ) {
         this.catalogService = catalogService;
         this.accountService = accountService;
         this.inventoryService = inventoryService;
         this.orderMapper = orderMapper;
         this.snapshotService = snapshotService;
+        this.shippingOrderService = shippingOrderService;
     }
 
     @Override
@@ -105,6 +110,15 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
         inventoryService.confirm(redemptionNo);
         if (orderMapper.completeProcessing(redemptionNo) != 1) {
             throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
+        }
+        if (order.getProductType() == ProductType.PHYSICAL) {
+            var shipping = shippingOrderService.create(new CreateShippingOrderCommand(
+                    ShippingSourceType.POINTS_REDEMPTION, String.valueOf(order.getId()), order.getUserId(),
+                    order.getAddressSnapshotId(), order.getSkuCode(), order.getProductName(),
+                    order.getImageUrl(), order.getQuantity(), null));
+            if (orderMapper.attachShippingOrder(order.getId(), shipping.id()) != 1) {
+                throw shippingError(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            }
         }
         return view(require(redemptionNo));
     }
@@ -154,6 +168,9 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
             return view(order);
         }
         if (order.getStatus() != PointsRedemptionStatus.COMPLETED) {
+            throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
+        }
+        if (order.getShippingOrderId() != null) {
             throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
         }
 
