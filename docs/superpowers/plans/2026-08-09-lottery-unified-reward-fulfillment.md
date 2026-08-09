@@ -300,15 +300,15 @@ Use the approved “1 free + 2 reward chances” example. Commit `feat: account 
 - `LotteryServiceImpl` derives one Shanghai `drawDate` from the eligibility snapshot, reserves bonus inside the existing user/activity lock before Redis, and passes the same date plus `Math.addExact(dailyLimit, cumulativeBonusForDate)` to Redis.
 - `DRAW_CONFIRMED` confirms Redis then draw-chance reservation; `DRAW_RELEASE_REQUESTED` releases Redis then draw-chance reservation. Both sides are independently idempotent.
 
-- [ ] **Step 1: Write failing real MySQL/Redis lifecycle tests**
+- [x] **Step 1: Write failing real MySQL/Redis lifecycle tests**
 
 Cover bonus-first behavior, insufficient ten-draw rejection with bonus restoration, Redis failure restoration, exact request retry, changed identity conflict, success confirmation, draw transaction failure release, and stale reservation reconciliation.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=RewardedDrawQuotaIntegrationTests,RewardedDrawRecoveryTests' test`. Expected: free daily quota is exceeded or bonus balances remain unchanged because integration is absent.
 
-- [ ] **Step 3: Integrate reserve and compensation**
+- [x] **Step 3: Integrate reserve and compensation**
 
 Inside the existing lock:
 
@@ -330,15 +330,15 @@ try {
 
 Extend `QuotaReservationRequest` with `LocalDate drawDate` and retain a compatibility constructor for existing focused tests. Make `RedisDrawQuotaService` use the request date rather than reading its clock again. Configure a bounded reconciliation batch and interval through `LotteryProperties`.
 
-- [ ] **Step 4: Integrate confirmation/release and recovery**
+- [x] **Step 4: Integrate confirmation/release and recovery**
 
 Call the draw-chance transition next to the corresponding Redis transition in `MessageConsumeService`. Add reconciliation after existing draw-order reconciliation; it may confirm only a successful matching order and otherwise release reservations past the processing cutoff.
 
-- [ ] **Step 5: Run GREEN and existing quota regressions**
+- [x] **Step 5: Run GREEN and existing quota regressions**
 
 Run focused tests plus `'-Dtest=RedisDrawQuotaServiceTests,LotteryOrchestrationIntegrationTests,LotteryReconciliationServiceTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Explain why Redis still counts the full draw count while MySQL increases the effective daily ceiling. Commit `feat: consume rewarded draw chances`.
 

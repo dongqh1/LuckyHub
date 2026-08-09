@@ -2,6 +2,9 @@ package com.dongqh.luckyhub.lottery.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.dongqh.luckyhub.benefit.service.BenefitFulfillmentService;
+import com.dongqh.luckyhub.common.exception.BusinessException;
+import com.dongqh.luckyhub.drawchance.enums.DrawChanceErrorCode;
+import com.dongqh.luckyhub.drawchance.service.DrawChanceService;
 import com.dongqh.luckyhub.lottery.config.MessagingProperties;
 import com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord;
 import com.dongqh.luckyhub.lottery.mapper.MessageConsumeRecordMapper;
@@ -23,6 +26,7 @@ public class MessageConsumeService {
 
     private final MessageConsumeRecordMapper consumeRecordMapper;
     private final DrawQuotaService quotaService;
+    private final DrawChanceService drawChanceService;
     private final BenefitFulfillmentService benefitFulfillmentService;
     private final ObjectMapper objectMapper;
     private final String logicalConsumerName;
@@ -31,12 +35,14 @@ public class MessageConsumeService {
     public MessageConsumeService(
             MessageConsumeRecordMapper consumeRecordMapper,
             DrawQuotaService quotaService,
+            DrawChanceService drawChanceService,
             BenefitFulfillmentService benefitFulfillmentService,
             ObjectMapper objectMapper,
             MessagingProperties properties,
             PlatformTransactionManager transactionManager) {
         this.consumeRecordMapper = consumeRecordMapper;
         this.quotaService = quotaService;
+        this.drawChanceService = drawChanceService;
         this.benefitFulfillmentService = benefitFulfillmentService;
         this.objectMapper = objectMapper;
         this.logicalConsumerName = properties.logicalConsumerName();
@@ -58,10 +64,12 @@ public class MessageConsumeService {
             case DRAW_CONFIRMED -> {
                 event.payloadAs(DrawConfirmedEvent.class, objectMapper);
                 quotaService.confirm(event.requestId());
+                settleRewardedChance(event.requestId(), true);
             }
             case DRAW_RELEASE_REQUESTED -> {
                 event.payloadAs(DrawReleaseRequestedEvent.class, objectMapper);
                 quotaService.release(event.requestId());
+                settleRewardedChance(event.requestId(), false);
             }
             case PRIZE_FULFILLMENT_REQUESTED -> {
                 var payload = event.payloadAs(
@@ -85,6 +93,16 @@ public class MessageConsumeService {
             if (!alreadyConsumed(eventId)) {
                 throw duplicateRace;
             }
+        }
+    }
+
+    private void settleRewardedChance(String requestId, boolean confirmed) {
+        try {
+            if (confirmed) drawChanceService.confirm(requestId);
+            else drawChanceService.release(requestId);
+        } catch (BusinessException error) {
+            // Events created before rewarded chances were introduced have no MySQL reservation.
+            if (error.getErrorCode() != DrawChanceErrorCode.RESERVATION_NOT_FOUND) throw error;
         }
     }
 

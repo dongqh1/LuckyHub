@@ -2,6 +2,10 @@ package com.dongqh.luckyhub.lottery.service.impl;
 
 import com.dongqh.luckyhub.auth.context.LoginContext;
 import com.dongqh.luckyhub.common.exception.BusinessException;
+import com.dongqh.luckyhub.drawchance.dto.DrawChanceReservationCommand;
+import com.dongqh.luckyhub.drawchance.enums.DrawChanceReservationStatus;
+import com.dongqh.luckyhub.drawchance.model.DrawChanceReservationResult;
+import com.dongqh.luckyhub.drawchance.service.DrawChanceService;
 import com.dongqh.luckyhub.lottery.dto.DrawCommand;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawOrder;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawRecord;
@@ -28,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -41,13 +46,15 @@ public class LotteryServiceImpl implements LotteryService {
     private final DrawQuotaService quotaService;
     private final DrawOrderLifecycleService lifecycleService;
     private final DrawTransactionService transactionService;
+    private final DrawChanceService drawChanceService;
 
     public LotteryServiceImpl(LotteryDrawOrderMapper orderMapper,
                               LotteryDrawRecordMapper recordMapper,
                               DrawEligibilityService eligibilityService,
                               DrawLockService lockService, DrawQuotaService quotaService,
                               DrawOrderLifecycleService lifecycleService,
-                              DrawTransactionService transactionService) {
+                              DrawTransactionService transactionService,
+                              DrawChanceService drawChanceService) {
         this.orderMapper = orderMapper;
         this.recordMapper = recordMapper;
         this.eligibilityService = eligibilityService;
@@ -55,6 +62,7 @@ public class LotteryServiceImpl implements LotteryService {
         this.quotaService = quotaService;
         this.lifecycleService = lifecycleService;
         this.transactionService = transactionService;
+        this.drawChanceService = drawChanceService;
     }
 
     @Override
@@ -65,6 +73,7 @@ public class LotteryServiceImpl implements LotteryService {
         if (existing != null) return resolveExisting(existing, command, userId, false);
 
         DrawEligibilityService.EligibilitySnapshot snapshot = eligibilityService.load(command.activityId());
+        LocalDate drawDate = snapshot.snapshotTime().toLocalDate();
         LotteryDrawOrder[] createdOrder = new LotteryDrawOrder[1];
         try {
             LockedDraw locked = lockService.execute(command.activityId(), userId, () -> {
@@ -72,13 +81,32 @@ public class LotteryServiceImpl implements LotteryService {
                 if (second != null) {
                     return new LockedDraw(resolveExisting(second, command, userId, false), null, null);
                 }
-                QuotaReservationResult reserved = quotaService.reserve(new QuotaReservationRequest(
-                        command.requestId(), command.activityId(), userId, command.drawCount(),
-                        snapshot.dailyLimit()));
-                requireActiveReservation(reserved);
-                LotteryDrawOrder processing = lifecycleService.createProcessing(new NewDrawOrder(
-                        command.requestId(), userId, command.activityId(), command.drawCount(),
-                        reserved.drawDate()));
+                DrawChanceReservationResult bonus = drawChanceService.reserve(
+                        new DrawChanceReservationCommand(command.requestId(), command.activityId(),
+                                userId, command.drawCount(), drawDate));
+                requireActiveBonusReservation(bonus);
+                QuotaReservationResult reserved;
+                try {
+                    long totalLimit = Math.addExact((long) snapshot.dailyLimit(),
+                            bonus.cumulativeBonusForDate());
+                    reserved = quotaService.reserve(new QuotaReservationRequest(
+                            command.requestId(), command.activityId(), userId, command.drawCount(),
+                            totalLimit, drawDate));
+                    requireActiveReservation(reserved);
+                } catch (RuntimeException error) {
+                    drawChanceService.release(command.requestId());
+                    throw error;
+                }
+                LotteryDrawOrder processing;
+                try {
+                    processing = lifecycleService.createProcessing(new NewDrawOrder(
+                            command.requestId(), userId, command.activityId(), command.drawCount(),
+                            reserved.drawDate()));
+                } catch (RuntimeException error) {
+                    quotaService.release(command.requestId());
+                    drawChanceService.release(command.requestId());
+                    throw error;
+                }
                 createdOrder[0] = processing;
                 return new LockedDraw(null, processing, reserved);
             });
@@ -95,6 +123,12 @@ public class LotteryServiceImpl implements LotteryService {
         } catch (RuntimeException error) {
             compensateIfNeeded(createdOrder[0], snapshot.snapshotTime());
             throw new BusinessException(LotteryErrorCode.DRAW_TRANSACTION_FAILED);
+        }
+    }
+
+    private void requireActiveBonusReservation(DrawChanceReservationResult reservation) {
+        if (reservation == null || reservation.status() != DrawChanceReservationStatus.RESERVED) {
+            throw new BusinessException(LotteryErrorCode.DRAW_ORDER_FAILED);
         }
     }
 

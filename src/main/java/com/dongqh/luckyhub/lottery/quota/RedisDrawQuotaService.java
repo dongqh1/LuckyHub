@@ -50,7 +50,8 @@ public class RedisDrawQuotaService implements DrawQuotaService {
     @Override
     public QuotaReservationResult reserve(QuotaReservationRequest request) {
         validate(request);
-        LocalDate drawDate = LocalDate.now(clock.withZone(properties.zoneId()));
+        LocalDate drawDate = request.drawDate() == null
+                ? LocalDate.now(clock.withZone(properties.zoneId())) : request.drawDate();
         Instant now = clock.instant();
         long expiresAt = drawDate.atStartOfDay(properties.zoneId()).toInstant()
                 .plus(properties.reservationRetention()).toEpochMilli();
@@ -67,7 +68,7 @@ public class RedisDrawQuotaService implements DrawQuotaService {
                     Long.toString(request.activityId()),
                     Long.toString(request.userId()),
                     Integer.toString(request.drawCount()),
-                    Integer.toString(request.dailyLimit()),
+                    Long.toString(request.dailyLimit()),
                     DRAW_DATE.format(drawDate),
                     Long.toString(now.toEpochMilli()),
                     Long.toString(now.plus(properties.processingTimeout()).toEpochMilli()),

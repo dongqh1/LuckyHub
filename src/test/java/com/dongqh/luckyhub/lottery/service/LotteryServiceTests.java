@@ -3,6 +3,9 @@ package com.dongqh.luckyhub.lottery.service;
 import com.dongqh.luckyhub.auth.context.LoginContext;
 import com.dongqh.luckyhub.auth.model.LoginPrincipal;
 import com.dongqh.luckyhub.common.exception.BusinessException;
+import com.dongqh.luckyhub.drawchance.enums.DrawChanceReservationStatus;
+import com.dongqh.luckyhub.drawchance.model.DrawChanceReservationResult;
+import com.dongqh.luckyhub.drawchance.service.DrawChanceService;
 import com.dongqh.luckyhub.lottery.dto.DrawCommand;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawOrder;
 import com.dongqh.luckyhub.lottery.entity.LotteryDrawRecord;
@@ -45,8 +48,9 @@ class LotteryServiceTests {
     private final DrawQuotaService quota = mock(DrawQuotaService.class);
     private final DrawOrderLifecycleService lifecycle = mock(DrawOrderLifecycleService.class);
     private final DrawTransactionService transaction = mock(DrawTransactionService.class);
+    private final DrawChanceService drawChances = mock(DrawChanceService.class);
     private final LotteryService service = new LotteryServiceImpl(
-            orderMapper, recordMapper, eligibility, lock, quota, lifecycle, transaction);
+            orderMapper, recordMapper, eligibility, lock, quota, lifecycle, transaction, drawChances);
 
     private final String requestId = UUID.randomUUID().toString();
     private final DrawCommand command = new DrawCommand(requestId, 20L, 1);
@@ -62,6 +66,9 @@ class LotteryServiceTests {
                 20L, 5, 25, List.of(prize()), now));
         when(quota.reserve(any())).thenReturn(new QuotaReservationResult(
                 requestId, ReservationStatus.RESERVED, drawDate, 1, false));
+        when(drawChances.reserve(any())).thenReturn(new DrawChanceReservationResult(
+                requestId, 20L, 10L, 1, drawDate, 0, 0,
+                DrawChanceReservationStatus.RESERVED, false));
         when(lifecycle.createProcessing(any())).thenReturn(order(99L, DrawOrderStatus.PROCESSING));
         when(transaction.execute(any())).thenReturn(new DrawExecutionResult(
                 99L, requestId, DrawOrderStatus.SUCCESS, now,
@@ -86,16 +93,33 @@ class LotteryServiceTests {
             assertThat(item.prizeName()).isEqualTo("一等奖");
             assertThat(item.benefitId()).isEqualTo(201L);
         });
-        InOrder ordered = inOrder(orderMapper, eligibility, lock, quota, lifecycle, transaction);
+        InOrder ordered = inOrder(orderMapper, eligibility, lock, drawChances, quota, lifecycle, transaction);
         ordered.verify(orderMapper).selectByRequestId(requestId);
         ordered.verify(eligibility).load(20L);
         ordered.verify(lock).execute(eq(20L), eq(10L), any());
         ordered.verify(orderMapper).selectByRequestId(requestId);
+        ordered.verify(drawChances).reserve(argThat(r -> r.drawDate().equals(drawDate)));
         ordered.verify(quota).reserve(argThat(r -> r.userId() == 10L && r.dailyLimit() == 5));
         ordered.verify(lifecycle).createProcessing(argThat(o -> o.drawDate().equals(drawDate)));
         ordered.verify(transaction).execute(argThat(c -> c.prizes().size() == 1
                 && c.noWinWeight() == 25 && c.drawTime().equals(now)));
         verify(eligibility, times(1)).load(20L);
+    }
+
+    @Test
+    void cumulativeRewardedChancesIncreaseRedisLimitAndRedisFailureReleasesReservation() {
+        when(drawChances.reserve(any())).thenReturn(new DrawChanceReservationResult(
+                requestId, 20L, 10L, 1, drawDate, 1, 2,
+                DrawChanceReservationStatus.RESERVED, false));
+
+        service.draw(command);
+        verify(quota).reserve(argThat(request -> request.dailyLimit() == 7
+                && request.drawDate().equals(drawDate)));
+
+        reset(quota);
+        when(quota.reserve(any())).thenThrow(new BusinessException(LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE));
+        assertError(() -> service.draw(command), LotteryErrorCode.DRAW_QUOTA_UNAVAILABLE);
+        verify(drawChances).release(requestId);
     }
 
     @Test
@@ -172,13 +196,14 @@ class LotteryServiceTests {
     }
 
     @Test
-    void mysqlFailureBeforeOrderExistsLeavesReservationForTimeoutReconciliation() {
+    void mysqlFailureBeforeOrderExistsImmediatelyReleasesBothReservations() {
         when(lifecycle.createProcessing(any())).thenThrow(new IllegalStateException("mysql down"));
 
         assertError(() -> service.draw(command), LotteryErrorCode.DRAW_TRANSACTION_FAILED);
 
         verify(lifecycle, never()).markFailedAndRequestRelease(any(), anyString(), any());
-        verify(quota, never()).release(anyString());
+        verify(quota).release(requestId);
+        verify(drawChances).release(requestId);
     }
 
     @Test

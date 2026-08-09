@@ -2,6 +2,7 @@ package com.dongqh.luckyhub.lottery.service;
 
 import com.dongqh.luckyhub.auth.context.LoginContext;
 import com.dongqh.luckyhub.auth.model.LoginPrincipal;
+import com.dongqh.luckyhub.drawchance.service.DrawChanceService;
 import com.dongqh.luckyhub.lottery.dto.DrawCommand;
 import com.dongqh.luckyhub.lottery.enums.DrawOrderStatus;
 import com.dongqh.luckyhub.lottery.enums.DrawResultType;
@@ -33,11 +34,13 @@ class LotteryOrchestrationIntegrationTests {
     @Autowired private JdbcTemplate jdbcTemplate;
     @Autowired private StringRedisTemplate redisTemplate;
     @Autowired private DrawQuotaService quotaService;
+    @Autowired private DrawChanceService drawChanceService;
     private String requestId;
     private Long activityId;
     private DrawOrderView result;
     private LocalDate retainedQuotaDate;
     private LocalDate originalQuotaDate;
+    private boolean insertedUser;
 
     @AfterEach
     void cleanUpExactRows() {
@@ -49,6 +52,9 @@ class LotteryOrchestrationIntegrationTests {
             jdbcTemplate.update("DELETE FROM lottery_draw_order WHERE request_id = ?", requestId);
             redisTemplate.delete(DrawQuotaKeys.reservation(requestId));
             redisTemplate.opsForZSet().remove(DrawQuotaKeys.reservationTimeouts(), requestId);
+            jdbcTemplate.update("DELETE FROM draw_chance_ledger WHERE user_id=?", USER_ID);
+            jdbcTemplate.update("DELETE FROM draw_chance_reservation WHERE request_id=?", requestId);
+            jdbcTemplate.update("DELETE FROM draw_chance_account WHERE user_id=?", USER_ID);
         }
         if (result != null) {
             redisTemplate.delete(DrawQuotaKeys.quota(activityId, USER_ID, result.drawDate()));
@@ -62,6 +68,28 @@ class LotteryOrchestrationIntegrationTests {
         if (activityId != null) {
             jdbcTemplate.update("DELETE FROM marketing_activity WHERE id = ?", activityId);
         }
+        if (insertedUser) jdbcTemplate.update("DELETE FROM sys_user WHERE id=?", USER_ID);
+    }
+
+    @Test
+    void nineRewardedChancesExtendOneFreeDailyChanceToARealTenDraw() {
+        jdbcTemplate.update("INSERT INTO sys_user(id,username,password,nickname,status) VALUES(?,?,?,?,1)",
+                USER_ID, "rewarded-" + UUID.randomUUID(), "x", "奖励次数集成测试");
+        insertedUser = true;
+        activityId = insertNoWinActivity();
+        jdbcTemplate.update("UPDATE marketing_activity SET daily_limit=1 WHERE id=?", activityId);
+        requestId = UUID.randomUUID().toString();
+        drawChanceService.credit(USER_ID, "integration-reward-" + requestId, 9);
+        LoginContext.set(new LoginPrincipal(USER_ID, "integration", "session"));
+
+        result = lotteryService.draw(new DrawCommand(requestId, activityId, 10));
+
+        assertThat(result.status()).isEqualTo(DrawOrderStatus.SUCCESS);
+        assertThat(result.results()).hasSize(10);
+        assertThat(drawChanceService.get(USER_ID).availableBalance()).isZero();
+        assertThat(drawChanceService.get(USER_ID).reservedBalance()).isEqualTo(9);
+        assertThat(redisTemplate.opsForValue().get(
+                DrawQuotaKeys.quota(activityId, USER_ID, result.drawDate()))).isEqualTo("10");
     }
 
     @Test
