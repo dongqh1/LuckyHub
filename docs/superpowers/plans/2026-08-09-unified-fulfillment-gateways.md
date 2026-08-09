@@ -36,7 +36,7 @@
 
 **Files:**
 - Create: `src/main/resources/db/migration/V14__add_fulfillment_engine.sql`
-- Create: `src/main/resources/db/migration/V15__add_simulated_providers.sql`
+- Create: `src/main/resources/db/migration/V15__add_fulfillment_simulators.sql`
 - Create: `src/main/java/com/dongqh/luckyhub/fulfillment/{entity,enums,mapper}/...`
 - Modify: `src/main/java/com/dongqh/luckyhub/config/MybatisPlusConfig.java`
 - Test: `src/test/java/com/dongqh/luckyhub/fulfillment/FulfillmentSchemaContractTests.java`
@@ -46,11 +46,11 @@
 **Interfaces:**
 - Produces `FulfillmentTaskMapper`, `FulfillmentAttemptMapper`, `FulfillmentQuarantineMapper` and enums `FulfillmentType`, `FulfillmentStatus`, `AttemptOperation`, `GatewayOutcome`, `FailureCategory`.
 
-- [ ] Write schema/domain tests requiring V14/V15, 8 tables, unique fulfillment numbers, task due/lease indexes, four permissions and stable error codes 52001-52010.
-- [ ] Run `'-Dtest=FulfillmentSchemaContractTests,FulfillmentDomainContractTests' test`; verify RED because migrations/types are missing.
-- [ ] Add V14 task/attempt/quarantine tables and permissions; add V15 four provider record tables and `sim_failure_rule`; add entities, enums, errors and mappers.
-- [ ] Add fulfillment/simulator mapper scans; rerun the two tests GREEN.
-- [ ] Write the Chinese explanation, check Task 1 boxes, commit `feat: add fulfillment persistence`.
+- [x] Write schema/domain tests requiring V14/V15, 8 tables, unique fulfillment numbers, task due/lease indexes, four permissions and stable error codes 52001-52010.
+- [x] Run `'-Dtest=FulfillmentSchemaContractTests,FulfillmentDomainContractTests' test`; verify RED because migrations/types are missing.
+- [x] Add V14 task/attempt/quarantine tables and permissions; add V15 four provider record tables and `sim_failure_rule`; add entities, enums, errors and mappers.
+- [x] Add fulfillment/simulator mapper scans; rerun the two tests GREEN.
+- [x] Write the Chinese explanation, check Task 1 boxes, commit `feat: add fulfillment persistence`.
 
 Required state values:
 

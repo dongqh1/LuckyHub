@@ -23,7 +23,8 @@ import org.springframework.context.annotation.Configuration;
         "com.dongqh.luckyhub.coupon.mapper",
         "com.dongqh.luckyhub.membership.mapper",
         "com.dongqh.luckyhub.order.mapper",
-        "com.dongqh.luckyhub.payment.mapper"
+        "com.dongqh.luckyhub.payment.mapper",
+        "com.dongqh.luckyhub.fulfillment.mapper"
 })
 public class MybatisPlusConfig {
 
