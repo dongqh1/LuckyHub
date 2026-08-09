@@ -67,69 +67,79 @@ class PhysicalOrderAddressIntegrationTests {
 
     @Test
     void physicalCashAndPointsOrdersRequireOwnedAddressAndExposeOnlyMaskedSnapshot() {
+        String suffix = UUID.randomUUID().toString();
         long owner = createUser();
         long other = createUser();
         long ownerAddress = createAddress(owner);
         long otherAddress = createAddress(other);
         long cashSku = createSku(ProductType.PHYSICAL, true, false);
         long pointsSku = createSku(ProductType.PHYSICAL, false, true);
-        points.adjust(new AdminPointsAdjustmentCommand(owner, 1_000L, "SEED-PHYSICAL", "测试入账"));
+        points.adjust(new AdminPointsAdjustmentCommand(owner, 1_000L, "SEED-PHYSICAL-" + suffix, "测试入账"));
 
         assertRequestInvalid(() -> cashOrders.create(owner,
-                new CreateCashOrderCommand("CASH-NO-ADDRESS", cashSku, 1, null, null)));
+                new CreateCashOrderCommand("CASH-NO-ADDRESS-" + suffix, cashSku, 1, null, null)));
         assertAccessDenied(() -> cashOrders.create(owner,
-                new CreateCashOrderCommand("CASH-OTHER-ADDRESS", cashSku, 1, null, otherAddress)));
+                new CreateCashOrderCommand("CASH-OTHER-ADDRESS-" + suffix, cashSku, 1, null, otherAddress)));
         assertRequestInvalid(() -> redemptions.create(owner,
-                new CreatePointsRedemptionCommand("POINTS-NO-ADDRESS", pointsSku, 1, null)));
+                new CreatePointsRedemptionCommand("POINTS-NO-ADDRESS-" + suffix, pointsSku, 1, null)));
 
         var cash = cashOrders.create(owner,
-                new CreateCashOrderCommand("CASH-PHYSICAL", cashSku, 1, null, ownerAddress));
+                new CreateCashOrderCommand("CASH-PHYSICAL-" + suffix, cashSku, 1, null, ownerAddress));
         var redemption = redemptions.create(owner,
-                new CreatePointsRedemptionCommand("POINTS-PHYSICAL", pointsSku, 1, ownerAddress));
+                new CreatePointsRedemptionCommand("POINTS-PHYSICAL-" + suffix, pointsSku, 1, ownerAddress));
 
         assertThat(cash.addressSnapshot()).isNotNull();
         assertThat(cash.addressSnapshot().receiverMasked()).isEqualTo("张*");
         assertThat(redemption.addressSnapshot()).isNotNull();
         assertThat(redemption.addressSnapshot().phoneMasked()).isEqualTo("138****5678");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM shipping_address_snapshot WHERE user_id=?", Integer.class, owner)).isEqualTo(2);
     }
 
     @Test
     void virtualOrdersRejectAddressAndKeepLegacyNullSnapshot() {
+        String suffix = UUID.randomUUID().toString();
         long userId = createUser();
         long addressId = createAddress(userId);
         long cashSku = createSku(ProductType.VIRTUAL, true, false);
         long pointsSku = createSku(ProductType.VIRTUAL, false, true);
-        points.adjust(new AdminPointsAdjustmentCommand(userId, 1_000L, "SEED-VIRTUAL", "测试入账"));
+        points.adjust(new AdminPointsAdjustmentCommand(userId, 1_000L, "SEED-VIRTUAL-" + suffix, "测试入账"));
 
         assertRequestInvalid(() -> cashOrders.create(userId,
-                new CreateCashOrderCommand("CASH-VIRTUAL-BAD", cashSku, 1, null, addressId)));
+                new CreateCashOrderCommand("CASH-VIRTUAL-BAD-" + suffix, cashSku, 1, null, addressId)));
         assertRequestInvalid(() -> redemptions.create(userId,
-                new CreatePointsRedemptionCommand("POINTS-VIRTUAL-BAD", pointsSku, 1, addressId)));
+                new CreatePointsRedemptionCommand("POINTS-VIRTUAL-BAD-" + suffix, pointsSku, 1, addressId)));
 
         assertThat(cashOrders.create(userId,
-                new CreateCashOrderCommand("CASH-VIRTUAL", cashSku, 1, null, null)).addressSnapshot()).isNull();
+                new CreateCashOrderCommand("CASH-VIRTUAL-" + suffix, cashSku, 1, null, null)).addressSnapshot()).isNull();
         assertThat(redemptions.create(userId,
-                new CreatePointsRedemptionCommand("POINTS-VIRTUAL", pointsSku, 1, null)).addressSnapshot()).isNull();
+                new CreatePointsRedemptionCommand("POINTS-VIRTUAL-" + suffix, pointsSku, 1, null)).addressSnapshot()).isNull();
     }
 
     @Test
     void retriesWithDifferentAddressConflictAndRollbackLeavesNoSnapshot() {
+        String suffix = UUID.randomUUID().toString();
+        String retryRedemptionNo = "RETRY-SNAPSHOT-" + suffix;
         long userId = createUser();
         long first = createAddress(userId);
         long second = createAddress(userId);
         long sku = createSku(ProductType.PHYSICAL, false, true);
-        points.adjust(new AdminPointsAdjustmentCommand(userId, 50L, "SEED-ROLLBACK-SNAPSHOT", "测试入账"));
+        points.adjust(new AdminPointsAdjustmentCommand(
+                userId, 50L, "SEED-ROLLBACK-SNAPSHOT-" + suffix, "测试入账"));
 
         assertThatThrownBy(() -> redemptions.create(userId,
-                new CreatePointsRedemptionCommand("ROLLBACK-SNAPSHOT", sku, 1, first)))
+                new CreatePointsRedemptionCommand("ROLLBACK-SNAPSHOT-" + suffix, sku, 1, first)))
                 .isInstanceOf(BusinessException.class);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM shipping_address_snapshot
+                WHERE user_id=? AND source_type=?
+                """, Integer.class, userId, "POINTS_REDEMPTION")).isZero();
 
-        points.adjust(new AdminPointsAdjustmentCommand(userId, 1_000L, "SEED-RETRY-SNAPSHOT", "测试入账"));
-        redemptions.create(userId, new CreatePointsRedemptionCommand("RETRY-SNAPSHOT", sku, 1, first));
+        points.adjust(new AdminPointsAdjustmentCommand(
+                userId, 1_000L, "SEED-RETRY-SNAPSHOT-" + suffix, "测试入账"));
+        redemptions.create(userId, new CreatePointsRedemptionCommand(retryRedemptionNo, sku, 1, first));
         assertThatThrownBy(() -> redemptions.create(userId,
-                new CreatePointsRedemptionCommand("RETRY-SNAPSHOT", sku, 1, second)))
+                new CreatePointsRedemptionCommand(retryRedemptionNo, sku, 1, second)))
                 .isInstanceOf(BusinessException.class);
     }
 

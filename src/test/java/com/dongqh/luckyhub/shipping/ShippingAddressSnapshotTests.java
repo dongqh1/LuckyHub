@@ -7,7 +7,6 @@ import com.dongqh.luckyhub.shipping.dto.CreateShippingAddressCommand;
 import com.dongqh.luckyhub.shipping.entity.ShippingAddressSnapshot;
 import com.dongqh.luckyhub.shipping.enums.ShippingErrorCode;
 import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
-import com.dongqh.luckyhub.shipping.mapper.ShippingAddressSnapshotMapper;
 import com.dongqh.luckyhub.shipping.service.ShippingAddressService;
 import com.dongqh.luckyhub.shipping.service.ShippingAddressSnapshotService;
 import org.junit.jupiter.api.AfterEach;
@@ -27,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ShippingAddressSnapshotTests {
     @Autowired ShippingAddressService addresses;
     @Autowired ShippingAddressSnapshotService snapshots;
-    @Autowired ShippingAddressSnapshotMapper snapshotMapper;
     @Autowired SysUserMapper userMapper;
     @Autowired JdbcTemplate jdbc;
     private final List<Long> userIds = new ArrayList<>();
@@ -44,9 +42,10 @@ class ShippingAddressSnapshotTests {
     void copiesCiphertextWithoutDecryptingAndRemainsImmutableAfterAddressChanges() {
         long userId = createUser();
         long addressId = addresses.create(userId, address("张三", "杭州市", "文一西路1号")).id();
+        String sourceId = businessId("cash");
 
         ShippingAddressSnapshot created = snapshots.create(
-                userId, addressId, ShippingSourceType.CASH_ORDER, "101");
+                userId, addressId, ShippingSourceType.CASH_ORDER, sourceId);
         var originalCiphertexts = ciphertexts(created);
         var originalMasked = List.of(created.getReceiverMasked(), created.getPhoneMasked(), created.getRegionMasked());
 
@@ -58,7 +57,10 @@ class ShippingAddressSnapshotTests {
         assertThat(ciphertexts(unchanged)).isEqualTo(originalCiphertexts);
         assertThat(List.of(unchanged.getReceiverMasked(), unchanged.getPhoneMasked(), unchanged.getRegionMasked()))
                 .isEqualTo(originalMasked).containsExactly("张*", "138****5678", "浙江省杭州市余杭区***");
-        assertThat(snapshotMapper.selectCount(null)).isOne();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM shipping_address_snapshot
+                WHERE user_id=? AND source_type=? AND source_id=?
+                """, Integer.class, userId, ShippingSourceType.CASH_ORDER.name(), sourceId)).isOne();
     }
 
     @Test
@@ -66,15 +68,16 @@ class ShippingAddressSnapshotTests {
         long userId = createUser();
         long first = addresses.create(userId, address("张三", "杭州市", "文一西路1号")).id();
         long second = addresses.create(userId, address("李四", "杭州市", "文一西路2号")).id();
+        String sourceId = businessId("points");
         ShippingAddressSnapshot created = snapshots.create(
-                userId, first, ShippingSourceType.POINTS_REDEMPTION, "202");
+                userId, first, ShippingSourceType.POINTS_REDEMPTION, sourceId);
 
-        assertThat(snapshots.create(userId, first, ShippingSourceType.POINTS_REDEMPTION, "202").getId())
+        assertThat(snapshots.create(userId, first, ShippingSourceType.POINTS_REDEMPTION, sourceId).getId())
                 .isEqualTo(created.getId());
-        assertError(() -> snapshots.create(userId, second, ShippingSourceType.POINTS_REDEMPTION, "202"));
+        assertError(() -> snapshots.create(userId, second, ShippingSourceType.POINTS_REDEMPTION, sourceId));
         addresses.update(userId, first, new com.dongqh.luckyhub.shipping.dto.UpdateShippingAddressCommand(
                 "王五", "13712345678", "浙江省", "杭州市", "余杭区", "未来科技城3号", false));
-        assertError(() -> snapshots.create(userId, first, ShippingSourceType.POINTS_REDEMPTION, "202"));
+        assertError(() -> snapshots.create(userId, first, ShippingSourceType.POINTS_REDEMPTION, sourceId));
     }
 
     private long createUser() {
@@ -91,6 +94,10 @@ class ShippingAddressSnapshotTests {
     private CreateShippingAddressCommand address(String receiver, String city, String detail) {
         return new CreateShippingAddressCommand(receiver, "13812345678", "浙江省", city,
                 "余杭区", detail, false);
+    }
+
+    private String businessId(String prefix) {
+        return prefix + "-" + UUID.randomUUID();
     }
 
     private List<String> ciphertexts(ShippingAddressSnapshot snapshot) {
