@@ -82,6 +82,26 @@ class LotteryRewardDispatchTests {
         verify(benefits, never()).transitionStatus(anyLong(), any(), any());
     }
 
+    @Test
+    void productSnapshotFreezesClaimDeadlineWithoutCreatingFulfillmentTask() {
+        RewardSnapshot snapshot = new RewardSnapshot(8L, "P", RewardType.PRODUCT, 9L, 1,
+                "{\"skuId\":9,\"skuCode\":\"SKU-9\",\"productName\":\"礼盒\",\"skuName\":\"默认\",\"quantity\":1}",
+                "b".repeat(64));
+        var validated = new ValidatedLotteryReward(1, 2, 3, "r", 4, 5, 6,
+                PrizeType.PHYSICAL, BenefitStatus.PENDING, snapshot);
+        DrawEventEnvelope envelope = envelope();
+        PrizeFulfillmentRequestedEvent payload = payload();
+        when(identities.validate(envelope, payload)).thenReturn(validated);
+        when(benefits.markClaimPending(eq(1L), eq(BenefitStatus.PENDING), any())).thenReturn(1);
+        LocalDateTime before = LocalDateTime.now().plusDays(7).minusSeconds(1);
+
+        service.dispatch(envelope, payload);
+
+        verify(benefits).markClaimPending(eq(1L), eq(BenefitStatus.PENDING), argThat(deadline ->
+                deadline.isAfter(before) && deadline.isBefore(LocalDateTime.now().plusDays(7).plusSeconds(1))));
+        verifyNoInteractions(tasks);
+    }
+
     private DrawEventEnvelope envelope() {
         return new DrawEventEnvelope(UUID.randomUUID(), DrawEventType.PRIZE_FULFILLMENT_REQUESTED, 1,
                 "r", 4L, 5L, 3L, LocalDateTime.now(), json.valueToTree(payload()));
