@@ -14,6 +14,9 @@ import com.dongqh.luckyhub.prize.enums.PrizeLevel;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
 import com.dongqh.luckyhub.prize.mapper.MarketingPrizeMapper;
 import com.dongqh.luckyhub.prize.service.impl.PrizeServiceImpl;
+import com.dongqh.luckyhub.reward.entity.RewardDefinition;
+import com.dongqh.luckyhub.reward.enums.RewardType;
+import com.dongqh.luckyhub.reward.mapper.RewardDefinitionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,7 @@ class PrizeServiceTests {
 
     @Mock
     private MarketingPrizeMapper mapper;
+    @Mock private RewardDefinitionMapper rewards;
 
     private PrizeService service;
 
@@ -48,11 +52,12 @@ class PrizeServiceTests {
 
     @BeforeEach
     void setUp() {
-        service = new PrizeServiceImpl(mapper);
+        service = new PrizeServiceImpl(mapper, rewards);
     }
 
     @Test
     void createsEnabledPrizeAndReturnsView() {
+        when(rewards.selectById(7L)).thenReturn(reward(7L, RewardType.COUPON));
         when(mapper.insert(any(MarketingPrize.class))).thenAnswer(invocation -> {
             MarketingPrize prize = invocation.getArgument(0);
             prize.setId(9L);
@@ -65,7 +70,7 @@ class PrizeServiceTests {
                 PrizeLevel.FIRST,
                 " https://cdn.example/prize.jpg ",
                 " 说明 ",
-                true
+                true, 7L
         ));
 
         ArgumentCaptor<MarketingPrize> captor = ArgumentCaptor.forClass(MarketingPrize.class);
@@ -113,6 +118,11 @@ class PrizeServiceTests {
         assertThat(view.prizeName()).isEqualTo("新奖品");
         assertThat(view.imageUrl()).isNull();
         assertThat(view.status()).isEqualTo(1);
+    }
+
+    private RewardDefinition reward(long id, RewardType type) {
+        RewardDefinition reward = new RewardDefinition(); reward.setId(id);
+        reward.setRewardType(type); reward.setStatus(1); return reward;
     }
 
     @Test

@@ -11,12 +11,16 @@ import com.dongqh.luckyhub.lottery.service.DrawEligibilityService;
 import com.dongqh.luckyhub.prize.entity.MarketingPrize;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
 import com.dongqh.luckyhub.prize.mapper.MarketingPrizeMapper;
+import com.dongqh.luckyhub.reward.enums.RewardType;
+import com.dongqh.luckyhub.reward.model.RewardSnapshot;
+import com.dongqh.luckyhub.reward.service.RewardSnapshotService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,8 +33,9 @@ class DrawEligibilityServiceTests {
     private final MarketingActivityMapper activityMapper = mock(MarketingActivityMapper.class);
     private final MarketingActivityPrizeMapper relationMapper = mock(MarketingActivityPrizeMapper.class);
     private final MarketingPrizeMapper prizeMapper = mock(MarketingPrizeMapper.class);
+    private final RewardSnapshotService rewardSnapshots = mock(RewardSnapshotService.class);
     private final DrawEligibilityService service = new DrawEligibilityServiceImpl(
-            activityMapper, relationMapper, prizeMapper, CLOCK);
+            activityMapper, relationMapper, prizeMapper, rewardSnapshots, CLOCK);
 
     @Test
     void loadsOneImmutableShanghaiTimeConfigurationSnapshot() {
@@ -40,10 +45,14 @@ class DrawEligibilityServiceTests {
         relation.setWeight(40); relation.setRemainingStock(5); relation.setSortOrder(1);
         MarketingPrize prize = new MarketingPrize();
         prize.setId(3L); prize.setPrizeName("券"); prize.setPrizeType(PrizeType.COUPON);
+        prize.setRewardDefinitionId(9L);
         prize.setImageUrl("https://img"); prize.setStatus(0);
         when(activityMapper.selectById(1L)).thenReturn(activity);
         when(relationMapper.selectList(any())).thenReturn(List.of(relation));
         when(prizeMapper.selectByIds(List.of(3L))).thenReturn(List.of(prize));
+        RewardSnapshot reward = new RewardSnapshot(9L, "COUPON-9", RewardType.COUPON,
+                6L, 1, "{\"templateId\":6}", "a".repeat(64));
+        when(rewardSnapshots.resolveForPrizes(List.of(prize))).thenReturn(Map.of(3L, reward));
 
         DrawEligibilityService.EligibilitySnapshot snapshot = service.load(1L);
 
@@ -54,10 +63,28 @@ class DrawEligibilityServiceTests {
             assertThat(item.weight()).isEqualTo(40);
             assertThat(item.remainingStock()).isEqualTo(5);
             assertThat(item.enabled()).isFalse();
+            assertThat(item.rewardSnapshot()).isEqualTo(reward);
         });
         verify(activityMapper, times(1)).selectById(1L);
         assertThatThrownBy(() -> snapshot.prizes().clear())
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void keepsNullRewardSnapshotForLegacyPrize() {
+        MarketingActivityPrize relation = new MarketingActivityPrize();
+        relation.setId(2L); relation.setActivityId(1L); relation.setPrizeId(3L);
+        relation.setWeight(40); relation.setRemainingStock(5); relation.setSortOrder(1);
+        MarketingPrize legacy = new MarketingPrize();
+        legacy.setId(3L); legacy.setPrizeName("旧奖品"); legacy.setPrizeType(PrizeType.POINTS);
+        legacy.setStatus(1);
+        when(activityMapper.selectById(1L)).thenReturn(runningActivity());
+        when(relationMapper.selectList(any())).thenReturn(List.of(relation));
+        when(prizeMapper.selectByIds(List.of(3L))).thenReturn(List.of(legacy));
+        when(rewardSnapshots.resolveForPrizes(List.of(legacy))).thenReturn(Map.of());
+
+        assertThat(service.load(1L).prizes()).singleElement()
+                .extracting(item -> item.rewardSnapshot()).isNull();
     }
 
     @Test

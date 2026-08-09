@@ -24,6 +24,7 @@ class PrizeDomainModelTests {
                 null,
                 "x".repeat(501),
                 "x".repeat(501),
+                null,
                 null
         );
 
@@ -35,7 +36,8 @@ class PrizeDomainModelTests {
                         "prizeLevel",
                         "imageUrl",
                         "description",
-                        "stackable"
+                        "stackable",
+                        "rewardDefinitionId"
                 );
     }
 
@@ -43,7 +45,7 @@ class PrizeDomainModelTests {
     void keepsStableEnumNames() {
         assertThat(PrizeType.values())
                 .extracting(Enum::name)
-                .containsExactly("COUPON", "POINTS", "MEMBERSHIP", "PHYSICAL");
+                .containsExactly("COUPON", "POINTS", "MEMBERSHIP", "PHYSICAL", "DRAW_CHANCE");
         assertThat(PrizeLevel.values())
                 .extracting(Enum::name)
                 .containsExactly("FIRST", "SECOND", "THIRD", "CONSOLATION");

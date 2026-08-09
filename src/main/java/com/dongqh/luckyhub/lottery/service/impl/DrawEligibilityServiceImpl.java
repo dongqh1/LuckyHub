@@ -13,6 +13,8 @@ import com.dongqh.luckyhub.lottery.model.DrawPrizeSnapshot;
 import com.dongqh.luckyhub.lottery.service.DrawEligibilityService;
 import com.dongqh.luckyhub.prize.entity.MarketingPrize;
 import com.dongqh.luckyhub.prize.mapper.MarketingPrizeMapper;
+import com.dongqh.luckyhub.reward.model.RewardSnapshot;
+import com.dongqh.luckyhub.reward.service.RewardSnapshotService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -29,22 +32,27 @@ public class DrawEligibilityServiceImpl implements DrawEligibilityService {
     private final MarketingActivityMapper activityMapper;
     private final MarketingActivityPrizeMapper relationMapper;
     private final MarketingPrizeMapper prizeMapper;
+    private final RewardSnapshotService rewardSnapshots;
     private final Clock clock;
 
     @Autowired
     public DrawEligibilityServiceImpl(MarketingActivityMapper activityMapper,
                                       MarketingActivityPrizeMapper relationMapper,
                                       MarketingPrizeMapper prizeMapper,
+                                      RewardSnapshotService rewardSnapshots,
                                       LotteryProperties properties) {
-        this(activityMapper, relationMapper, prizeMapper, Clock.system(properties.zoneId()));
+        this(activityMapper, relationMapper, prizeMapper, rewardSnapshots,
+                Clock.system(properties.zoneId()));
     }
 
     DrawEligibilityServiceImpl(MarketingActivityMapper activityMapper,
                                MarketingActivityPrizeMapper relationMapper,
-                               MarketingPrizeMapper prizeMapper, Clock clock) {
+                               MarketingPrizeMapper prizeMapper,
+                               RewardSnapshotService rewardSnapshots, Clock clock) {
         this.activityMapper = activityMapper;
         this.relationMapper = relationMapper;
         this.prizeMapper = prizeMapper;
+        this.rewardSnapshots = rewardSnapshots;
         this.clock = clock;
     }
 
@@ -69,12 +77,15 @@ public class DrawEligibilityServiceImpl implements DrawEligibilityService {
         Map<Long, MarketingPrize> prizes = prizeIds.isEmpty() ? Map.of()
                 : prizeMapper.selectByIds(prizeIds).stream()
                 .collect(Collectors.toMap(MarketingPrize::getId, Function.identity()));
+        Map<Long, RewardSnapshot> resolvedRewards = rewardSnapshots.resolveForPrizes(
+                prizeIds.stream().map(prizes::get).filter(Objects::nonNull).toList());
         List<DrawPrizeSnapshot> snapshots = relations.stream().map(relation -> {
             MarketingPrize prize = prizes.get(relation.getPrizeId());
             if (prize == null) throw new BusinessException(LotteryErrorCode.DRAW_WEIGHT_INVALID);
             return new DrawPrizeSnapshot(relation.getId(), prize.getId(), prize.getPrizeName(),
                     prize.getPrizeType(), prize.getImageUrl(), relation.getWeight(),
-                    relation.getRemainingStock(), Integer.valueOf(1).equals(prize.getStatus()));
+                    relation.getRemainingStock(), Integer.valueOf(1).equals(prize.getStatus()),
+                    resolvedRewards.get(prize.getId()));
         }).toList();
         int dailyLimit = activity.getDailyLimit() == null ? 0 : activity.getDailyLimit();
         int noWinWeight = activity.getNoWinWeight() == null ? 0 : activity.getNoWinWeight();

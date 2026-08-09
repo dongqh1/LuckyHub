@@ -136,7 +136,7 @@ git commit -m "feat: persist lottery reward integration"
 - Produces `PrizeType RewardPrizeTypeMapping.toPrizeType(RewardType type)` and `boolean matches(RewardType, PrizeType)`.
 - `RewardSnapshot` contains definition ID/code/type, target ID, quantity, canonical payload JSON and SHA-256 fingerprint.
 
-- [ ] **Step 1: Write failing mapping, validation, fingerprint and API tests**
+- [x] **Step 1: Write failing mapping, validation, fingerprint and API tests**
 
 Cover all five mappings, disabled/missing targets, coupon and membership target validation, integer/multiplication overflow, stable canonical JSON/fingerprint, required binding for new prizes, first binding of a legacy prize, forbidden unbind/rebind, and legacy read compatibility.
 
@@ -148,11 +148,11 @@ assertThat(snapshot.payloadJson()).isEqualTo(
 assertThat(snapshot.fingerprint()).matches("[0-9a-f]{64}");
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=RewardSnapshotServiceTests,PrizeRewardBindingTests,RewardDefinitionServiceTests,PrizeServiceTests' test`. Expected: compilation/test failure for the absent types and binding rules.
 
-- [ ] **Step 3: Implement the five payloads and resolver**
+- [x] **Step 3: Implement the five payloads and resolver**
 
 Use records with constructor invariants and this service boundary:
 
@@ -164,15 +164,15 @@ public interface RewardSnapshotService {
 
 Load definitions and each target type in batches. Serialize payload records with the project `ObjectMapper`, hash the exact UTF-8 canonical JSON plus immutable definition fields, and reject invalid enabled-state/quantity combinations with `RewardErrorCode.REWARD_TARGET_INVALID` or `REWARD_CONFIG_INVALID`.
 
-- [ ] **Step 4: Implement prize binding without removing legacy rows**
+- [x] **Step 4: Implement prize binding without removing legacy rows**
 
 Append `@NotNull @Positive Long rewardDefinitionId` to create, append nullable `@Positive Long rewardDefinitionId` to update, expose `rewardDefinitionId` and `rewardType` in `PrizeView`, add `DRAW_CHANCE`, and validate compatibility through `RewardPrizeTypeMapping`. Existing database rows remain nullable; only service-created new rows are required to bind.
 
-- [ ] **Step 5: Run GREEN and regress activity/prize APIs**
+- [x] **Step 5: Run GREEN and regress activity/prize APIs**
 
 Run the focused tests plus `'-Dtest=PrizeControllerTests,ActivityPrizeServiceTests,ActivityServiceTests,DrawEligibilityServiceTests' test`. Expected: all pass.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Explain why a coupon reward stores both template ID and template code and show a legacy unbound prize beside a bound prize. Commit `feat: snapshot unified lottery rewards`.
 

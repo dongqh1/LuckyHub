@@ -2,6 +2,7 @@ package com.dongqh.luckyhub.lottery.model;
 
 import com.dongqh.luckyhub.lottery.algorithm.PrizeWeightSnapshot;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
+import com.dongqh.luckyhub.reward.model.RewardSnapshot;
 
 import java.util.Objects;
 
@@ -13,7 +14,15 @@ public record DrawPrizeSnapshot(
         String prizeImageUrl,
         long weight,
         int remainingStock,
-        boolean enabled) {
+        boolean enabled,
+        RewardSnapshot rewardSnapshot) {
+
+    public DrawPrizeSnapshot(long activityPrizeId, long prizeId, String prizeName,
+                             PrizeType prizeType, String prizeImageUrl, long weight,
+                             int remainingStock, boolean enabled) {
+        this(activityPrizeId, prizeId, prizeName, prizeType, prizeImageUrl, weight,
+                remainingStock, enabled, null);
+    }
 
     public DrawPrizeSnapshot {
         if (activityPrizeId <= 0 || prizeId <= 0) {

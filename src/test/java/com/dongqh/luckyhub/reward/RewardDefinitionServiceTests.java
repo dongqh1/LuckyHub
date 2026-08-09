@@ -7,6 +7,10 @@ import com.dongqh.luckyhub.catalog.enums.ProductType;
 import com.dongqh.luckyhub.catalog.mapper.ProductMapper;
 import com.dongqh.luckyhub.catalog.mapper.ProductSkuMapper;
 import com.dongqh.luckyhub.common.exception.BusinessException;
+import com.dongqh.luckyhub.coupon.entity.CouponTemplate;
+import com.dongqh.luckyhub.coupon.mapper.CouponTemplateMapper;
+import com.dongqh.luckyhub.membership.entity.MembershipProduct;
+import com.dongqh.luckyhub.membership.mapper.MembershipProductMapper;
 import com.dongqh.luckyhub.reward.dto.CreateRewardDefinitionCommand;
 import com.dongqh.luckyhub.reward.entity.RewardDefinition;
 import com.dongqh.luckyhub.reward.enums.RewardErrorCode;
@@ -19,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,10 +42,14 @@ class RewardDefinitionServiceTests {
 
     @Autowired
     private ProductSkuMapper skuMapper;
+    @Autowired private CouponTemplateMapper couponMapper;
+    @Autowired private MembershipProductMapper membershipMapper;
 
     @BeforeEach
     void cleanTables() {
         rewardMapper.delete(new LambdaQueryWrapper<>());
+        couponMapper.delete(new LambdaQueryWrapper<>());
+        membershipMapper.delete(new LambdaQueryWrapper<>());
         skuMapper.delete(new LambdaQueryWrapper<>());
         productMapper.delete(new LambdaQueryWrapper<>());
     }
@@ -48,11 +57,13 @@ class RewardDefinitionServiceTests {
     @Test
     void createsAllFiveRewardTypesAndNormalizesJson() {
         long skuId = createSku(1);
+        long couponId = createCoupon();
+        long membershipId = createMembership();
         List<CreateRewardDefinitionCommand> commands = List.of(
                 command("PRODUCT-1", RewardType.PRODUCT, skuId, " { \"source\" : \"mall\" } "),
-                command("COUPON-1", RewardType.COUPON, 2001L, null),
+                command("COUPON-1", RewardType.COUPON, couponId, null),
                 command("POINTS-1", RewardType.POINTS, null, "   "),
-                command("MEMBER-1", RewardType.MEMBERSHIP, 3001L, null),
+                command("MEMBER-1", RewardType.MEMBERSHIP, membershipId, null),
                 command("DRAW-1", RewardType.DRAW_CHANCE, null, null)
         );
 
@@ -84,6 +95,24 @@ class RewardDefinitionServiceTests {
         long disabledSkuId = createSku(0);
         assertTargetInvalid(command("DISABLED-SKU", RewardType.PRODUCT, disabledSkuId, null));
     }
+
+    @Test
+    void couponAndMembershipRewardsRequireExistingEnabledTargets() {
+        assertTargetInvalid(command("NO-COUPON", RewardType.COUPON, Long.MAX_VALUE, null));
+        assertTargetInvalid(command("NO-MEMBER", RewardType.MEMBERSHIP, Long.MAX_VALUE, null));
+    }
+
+    @Test
+    void discreteRewardsRejectUnboundedQuantitiesButPointsRemainLongValued() {
+        assertTargetInvalid(new CreateRewardDefinitionCommand(
+                "TOO-MANY-DRAWS", "次数过大", RewardType.DRAW_CHANCE, null, 101L, null));
+        var points = service.create(new CreateRewardDefinitionCommand(
+                "LARGE-POINTS", "大额积分", RewardType.POINTS, null, 100_000L, null));
+        assertThat(points.quantity()).isEqualTo(100_000L);
+    }
+
+    private long createCoupon(){CouponTemplate t=new CouponTemplate();t.setTemplateCode("C-"+System.nanoTime());t.setTemplateName("券");t.setCouponType(com.dongqh.luckyhub.coupon.enums.CouponType.NO_THRESHOLD);t.setThresholdCent(0L);t.setDiscountCent(10L);t.setValidFrom(LocalDateTime.now().minusDays(1));t.setValidUntil(LocalDateTime.now().plusDays(1));t.setPerUserLimit(10);t.setStackableWithMembership(true);t.setStatus(1);couponMapper.insert(t);return t.getId();}
+    private long createMembership(){MembershipProduct p=new MembershipProduct();p.setProductCode("M-"+System.nanoTime());p.setProductName("会员");p.setMembershipLevel("VIP");p.setCardType(com.dongqh.luckyhub.membership.enums.MembershipCardType.MONTH);p.setDurationDays(30);p.setPriceCent(0L);p.setDiscountBasisPoints(9000);p.setDailyDrawBonus(0);p.setPointsMultiplierBasisPoints(10000);p.setStatus(1);membershipMapper.insert(p);return p.getId();}
 
     @Test
     void translatesDuplicateCodeAndTrimsBusinessStrings() {

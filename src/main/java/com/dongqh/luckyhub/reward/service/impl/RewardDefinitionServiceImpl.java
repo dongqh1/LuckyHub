@@ -2,6 +2,10 @@ package com.dongqh.luckyhub.reward.service.impl;
 
 import com.dongqh.luckyhub.catalog.entity.ProductSku;
 import com.dongqh.luckyhub.catalog.mapper.ProductSkuMapper;
+import com.dongqh.luckyhub.coupon.entity.CouponTemplate;
+import com.dongqh.luckyhub.coupon.mapper.CouponTemplateMapper;
+import com.dongqh.luckyhub.membership.entity.MembershipProduct;
+import com.dongqh.luckyhub.membership.mapper.MembershipProductMapper;
 import com.dongqh.luckyhub.common.exception.BusinessException;
 import com.dongqh.luckyhub.reward.dto.CreateRewardDefinitionCommand;
 import com.dongqh.luckyhub.reward.entity.RewardDefinition;
@@ -25,20 +29,30 @@ public class RewardDefinitionServiceImpl implements RewardDefinitionService {
     private final RewardDefinitionMapper rewardMapper;
     private final ProductSkuMapper skuMapper;
     private final ObjectMapper objectMapper;
+    private final CouponTemplateMapper couponMapper;
+    private final MembershipProductMapper membershipMapper;
 
     public RewardDefinitionServiceImpl(
             RewardDefinitionMapper rewardMapper,
             ProductSkuMapper skuMapper,
+            CouponTemplateMapper couponMapper,
+            MembershipProductMapper membershipMapper,
             ObjectMapper objectMapper
     ) {
         this.rewardMapper = rewardMapper;
         this.skuMapper = skuMapper;
         this.objectMapper = objectMapper;
+        this.couponMapper = couponMapper;
+        this.membershipMapper = membershipMapper;
     }
 
     @Override
     @Transactional
     public RewardDefinitionView create(CreateRewardDefinitionCommand command) {
+        if (command.quantity() == null || command.quantity() <= 0
+                || (command.rewardType() != RewardType.POINTS && command.quantity() > 100)) {
+            throw new BusinessException(RewardErrorCode.REWARD_TARGET_INVALID);
+        }
         validateTarget(command.rewardType(), command.targetId());
 
         RewardDefinition definition = new RewardDefinition();
@@ -76,6 +90,18 @@ public class RewardDefinitionServiceImpl implements RewardDefinitionService {
         if (type == RewardType.PRODUCT) {
             ProductSku sku = skuMapper.selectById(targetId);
             if (sku == null || !Integer.valueOf(ENABLED).equals(sku.getStatus())) {
+                throw new BusinessException(RewardErrorCode.REWARD_TARGET_INVALID);
+            }
+        }
+        if (type == RewardType.COUPON) {
+            CouponTemplate template = couponMapper.selectById(targetId);
+            if (template == null || !Integer.valueOf(ENABLED).equals(template.getStatus())) {
+                throw new BusinessException(RewardErrorCode.REWARD_TARGET_INVALID);
+            }
+        }
+        if (type == RewardType.MEMBERSHIP) {
+            MembershipProduct product = membershipMapper.selectById(targetId);
+            if (product == null || !Integer.valueOf(ENABLED).equals(product.getStatus())) {
                 throw new BusinessException(RewardErrorCode.REWARD_TARGET_INVALID);
             }
         }

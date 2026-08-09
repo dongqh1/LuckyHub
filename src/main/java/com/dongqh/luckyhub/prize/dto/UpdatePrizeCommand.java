@@ -5,6 +5,7 @@ import com.dongqh.luckyhub.prize.enums.PrizeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 
 public record UpdatePrizeCommand(
 
@@ -25,6 +26,13 @@ public record UpdatePrizeCommand(
         String description,
 
         @NotNull(message = "是否可叠加不能为空")
-        Boolean stackable
+        Boolean stackable,
+
+        @Positive(message = "统一奖励定义ID必须大于0")
+        Long rewardDefinitionId
 ) {
+    public UpdatePrizeCommand(String prizeName, PrizeType prizeType, PrizeLevel prizeLevel,
+                              String imageUrl, String description, Boolean stackable) {
+        this(prizeName, prizeType, prizeLevel, imageUrl, description, stackable, null);
+    }
 }

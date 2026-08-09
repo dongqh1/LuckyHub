@@ -11,6 +11,7 @@ import com.dongqh.luckyhub.prize.service.PrizeService;
 import com.dongqh.luckyhub.prize.vo.PrizeView;
 import com.dongqh.luckyhub.rbac.annotation.RequirePermission;
 import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
+import com.dongqh.luckyhub.reward.enums.RewardType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -59,7 +60,8 @@ class PrizeControllerTests {
                   "prizeLevel": "FIRST",
                   "imageUrl": "https://cdn.example/prize.jpg",
                   "description": "测试奖品",
-                  "stackable": true
+                  "stackable": true,
+                  "rewardDefinitionId": 99
                 }
                 """;
 
@@ -114,7 +116,9 @@ class PrizeControllerTests {
                 true,
                 1,
                 null,
-                null
+                null,
+                99L,
+                RewardType.COUPON
         );
     }
 }
