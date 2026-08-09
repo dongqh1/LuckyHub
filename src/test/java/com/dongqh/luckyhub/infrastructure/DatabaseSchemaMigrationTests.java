@@ -70,7 +70,11 @@ class DatabaseSchemaMigrationTests {
             "sim_points_record",
             "sim_membership_record",
             "sim_logistics_record",
-            "sim_failure_rule"
+            "sim_failure_rule",
+            "draw_chance_account",
+            "draw_chance_ledger",
+            "draw_chance_reservation",
+            "lottery_reward_quarantine"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -114,7 +118,12 @@ class DatabaseSchemaMigrationTests {
             "sim_membership_record:external_reference",
             "sim_logistics_record:fulfillment_no",
             "sim_logistics_record:external_reference",
-            "sim_failure_rule:fulfillment_type"
+            "sim_failure_rule:fulfillment_type",
+            "user_benefit:fulfillment_no",
+            "draw_chance_account:user_id",
+            "draw_chance_ledger:business_type,business_id",
+            "draw_chance_reservation:request_id",
+            "lottery_reward_quarantine:event_id"
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -216,6 +225,16 @@ class DatabaseSchemaMigrationTests {
                 """, Integer.class);
 
         assertThat(successfulMigrations).isEqualTo(2);
+    }
+
+    @Test
+    void addsLotteryRewardIntegrationThroughVersionSixteen() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version = '16' AND success = 1
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isOne();
     }
 
     @Test

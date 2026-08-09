@@ -50,7 +50,7 @@
 - Produces nullable unique `UserBenefit.fulfillmentNo`.
 - Produces 4 new business tables, taking the empty-schema business table count from 39 to 43.
 
-- [ ] **Step 1: Write failing migration and reflection contracts**
+- [x] **Step 1: Write failing migration and reflection contracts**
 
 Assert exact V16 columns, JSON/CHAR/VARCHAR types, unique indexes, non-negative balances, the four table names, all CHECK values, mapper/entity bindings, and V16 Flyway success. Include a test that inserts a legacy benefit with every new field null and a test that rejects negative balances or duplicate reservation/event identities.
 
@@ -65,7 +65,7 @@ assertThat(uniqueIndexes()).contains(
         "lottery_reward_quarantine:event_id");
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -75,7 +75,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest
 
 Expected: tests fail because V16 and the new Java types do not exist.
 
-- [ ] **Step 3: Add V16 and minimal domain mappings**
+- [x] **Step 3: Add V16 and minimal domain mappings**
 
 V16 must add the six snapshot columns to both existing tables, `fulfillment_no` only to `user_benefit`, and create:
 
@@ -94,11 +94,11 @@ CREATE TABLE draw_chance_account (
 
 `draw_chance_ledger` has unique `(business_type,business_id)`; `draw_chance_reservation` has unique `request_id`; `lottery_reward_quarantine` has unique `event_id`. Use checks with exactly the enum values approved by the spec.
 
-- [ ] **Step 4: Run GREEN and regress the previous schema**
+- [x] **Step 4: Run GREEN and regress the previous schema**
 
 Run the focused command plus `'-Dtest=DatabaseSchemaMigrationTests,LotterySchemaContractTests,FulfillmentSchemaContractTests' test`. Expected: all selected tests pass and Flyway reports V16.
 
-- [ ] **Step 5: Document, check this task, and commit**
+- [x] **Step 5: Document, check this task, and commit**
 
 Document a legacy null-snapshot row and a new draw-chance reservation row. Commit:
 
