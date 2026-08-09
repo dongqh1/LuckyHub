@@ -175,11 +175,11 @@ record CreateFulfillmentTaskCommand(
 **Interfaces:**
 - Adds exponential backoff, `recoverExpiredLeases(limit)`, reconciliation query routing and bounded scheduled polling.
 
-- [ ] Write failing tests for retry delay, permanent quarantine, max-attempt quarantine, UNKNOWN query success, UNKNOWN query not-found then execute, and expired PROCESSING lease becoming RECONCILING.
-- [ ] Run `'-Dtest=FulfillmentRecoveryTests,FulfillmentEndToEndTests' test`; verify RED.
-- [ ] Implement configured base/max delay, attempt limits, quarantine upsert, lease recovery and scheduler with default batch 50.
-- [ ] Prove UNKNOWN_AFTER_SUCCESS creates one simulated record and ends SUCCEEDED through QUERY, never a second EXECUTE effect.
-- [ ] Run recovery/end-to-end tests GREEN, document the lost-response example, check boxes and commit `feat: reconcile fulfillment outcomes`.
+- [x] Write failing tests for retry delay, permanent quarantine, max-attempt quarantine, UNKNOWN query success, UNKNOWN query not-found then execute, and expired PROCESSING lease becoming RECONCILING.
+- [x] Run `'-Dtest=FulfillmentRecoveryTests,FulfillmentEndToEndTests' test`; verify RED.
+- [x] Implement configured base/max delay, attempt limits, quarantine upsert, lease recovery and scheduler with default batch 50.
+- [x] Prove UNKNOWN_AFTER_SUCCESS creates one simulated record and ends SUCCEEDED through QUERY, never a second EXECUTE effect.
+- [x] Run recovery/end-to-end tests GREEN, document the lost-response example, check boxes and commit `feat: reconcile fulfillment outcomes`.
 
 ### Task 7: Admin APIs, RBAC and safe operations
 

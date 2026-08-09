@@ -76,3 +76,11 @@ luckyhub:
     jwt:
       secret: ${JWT_SECRET}
       expiration: ${JWT_EXPIRATION}
+  fulfillment:
+    base-delay: 1s
+    max-delay: 1m
+    lease-duration: 30s
+    poll-interval: 5s
+    initial-delay: 60s
+    batch-size: 50
+    recovery-batch-size: 50
