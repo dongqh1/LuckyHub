@@ -35,7 +35,8 @@ public class PermissionInterceptorConfig
                         "/api/coupons/**",
                         "/api/memberships/**",
                         "/api/orders/**",
-                        "/api/payments/**"
+                        "/api/payments/**",
+                        "/api/shipping/**"
                 )
                 .order(100);
     }

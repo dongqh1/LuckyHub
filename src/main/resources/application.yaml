@@ -36,6 +36,15 @@ springdoc:
     path: /swagger-ui.html
 
 luckyhub:
+  shipping:
+    address-key: ${SHIPPING_ADDRESS_KEY}
+    address-key-version: v1
+    claim-period: 7d
+    callback-secret: ${SHIPPING_CALLBACK_SECRET}
+    callback-window: 5m
+    expiry-interval: 1m
+    expiry-initial-delay: 60s
+    batch-size: 50
   lottery:
     zone-id: Asia/Shanghai
     lock-wait: 3s

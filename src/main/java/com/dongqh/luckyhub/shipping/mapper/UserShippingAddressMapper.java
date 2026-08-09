@@ -8,6 +8,9 @@ import org.apache.ibatis.annotations.Select;
 import java.util.List;
 
 public interface UserShippingAddressMapper extends BaseMapper<UserShippingAddress> {
+    @Select("SELECT id FROM sys_user WHERE id=#{userId} FOR UPDATE")
+    Long lockUserRow(@Param("userId") long userId);
+
     @Select("SELECT * FROM user_shipping_address WHERE id=#{id} FOR UPDATE")
     UserShippingAddress lockById(@Param("id") long id);
 

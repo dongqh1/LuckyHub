@@ -36,7 +36,11 @@ class LotteryPersistenceContractTests {
                 DrawResultType.WIN, DrawResultType.NO_WIN);
         assertThat(BenefitStatus.values()).containsExactly(
                 BenefitStatus.PENDING, BenefitStatus.AVAILABLE,
-                BenefitStatus.CLAIM_PENDING, BenefitStatus.GRANT_FAILED);
+                BenefitStatus.CLAIM_PENDING, BenefitStatus.GRANT_FAILED,
+                BenefitStatus.CLAIMED, BenefitStatus.FULFILLING,
+                BenefitStatus.SHIPPED, BenefitStatus.DELIVERED,
+                BenefitStatus.CLAIM_EXPIRED, BenefitStatus.FULFILLMENT_FAILED,
+                BenefitStatus.FULFILLMENT_TERMINATED);
         assertThat(OutboxStatus.values()).containsExactly(
                 OutboxStatus.PENDING, OutboxStatus.PROCESSING, OutboxStatus.SENT, OutboxStatus.FAILED);
     }

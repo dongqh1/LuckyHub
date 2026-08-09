@@ -132,6 +132,9 @@ public final class PermissionCodes {
     public static final String FULFILLMENT_READ = "fulfillment:read";
     public static final String FULFILLMENT_OPERATE = "fulfillment:operate";
     public static final String SIMULATOR_CONTROL = "simulator:control";
+    public static final String SHIPPING_ADDRESS_MANAGE = "shipping:address:manage";
+    public static final String SHIPPING_READ = "shipping:read";
+    public static final String SHIPPING_OPERATE = "shipping:operate";
 
     private PermissionCodes() {
     }
