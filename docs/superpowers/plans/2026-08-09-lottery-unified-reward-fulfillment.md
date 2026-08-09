@@ -261,23 +261,23 @@ public record DrawChanceReservationResult(
     DrawChanceReservationStatus status, boolean duplicate) {}
 ```
 
-- [ ] **Step 1: Write failing credit/reserve/settle/concurrency tests**
+- [x] **Step 1: Write failing credit/reserve/settle/concurrency tests**
 
 Test idempotent credit, identity conflict, reserve moves available to reserved, zero-balance reservation, cumulative daily bonus, confirm debit ledger, release restoration ledger, duplicate confirm/release, 20 concurrent reservations never making either balance negative, and stale reconciliation using actual order state.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=DrawChanceServiceTests,DrawChanceConcurrencyTests' test`. Expected: compilation failure.
 
-- [ ] **Step 3: Implement short row-locked transactions**
+- [x] **Step 3: Implement short row-locked transactions**
 
 Use `SELECT ... FOR UPDATE`, exact arithmetic, bounded IDs, enabled-user validation for credit, conditional terminal transitions, and unique-ledger checks before balance mutation. `reserve` creates a zero-bonus row too, so a retry can cross-check all identity fields.
 
-- [ ] **Step 4: Run GREEN twice**
+- [x] **Step 4: Run GREEN twice**
 
 Run the focused tests twice to expose leaked state or order dependence. Expected: both runs pass with no duplicate ledgers.
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 Use the approved “1 free + 2 reward chances” example. Commit `feat: account for rewarded draw chances`.
 
