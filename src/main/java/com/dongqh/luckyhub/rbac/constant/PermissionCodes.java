@@ -128,6 +128,10 @@ public final class PermissionCodes {
     public static final String ORDER_CANCEL = "order:cancel";
     public static final String PAYMENT_CREATE = "payment:create";
     public static final String PAYMENT_SIMULATE = "payment:simulate";
+    public static final String FULFILLMENT_CREATE = "fulfillment:create";
+    public static final String FULFILLMENT_READ = "fulfillment:read";
+    public static final String FULFILLMENT_OPERATE = "fulfillment:operate";
+    public static final String SIMULATOR_CONTROL = "simulator:control";
 
     private PermissionCodes() {
     }

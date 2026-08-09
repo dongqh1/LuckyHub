@@ -195,11 +195,11 @@ record CreateFulfillmentTaskCommand(
 **Interfaces:**
 - Exposes the six approved `/api/admin/fulfillment/**` and `/api/admin/simulators/**` endpoints.
 
-- [ ] Write failing MockMvc tests for 201/200, validation, pagination, retry/terminate, fault control, 401/403 and exact permissions.
-- [ ] Add safety tests that reject unmasked phone/receiver, bound errors, and scan task/attempt/provider rows for secret or full-address leakage.
-- [ ] Run `'-Dtest=FulfillmentControllerTests,FulfillmentSecurityChainIntegrationTests,FulfillmentSafetyTests' test`; verify RED.
-- [ ] Add thin controllers, permission constants and service operations; existing `/api/admin/*` filter/interceptor mappings already protect the paths.
-- [ ] Run API/security and lottery security regressions GREEN, document PowerShell operations, check boxes and commit `feat: operate fulfillment tasks`.
+- [x] Write failing MockMvc tests for 201/200, validation, pagination, retry/terminate, fault control, 401/403 and exact permissions.
+- [x] Add safety tests that reject unmasked phone/receiver, bound errors, and scan task/attempt/provider rows for secret or full-address leakage.
+- [x] Run `'-Dtest=FulfillmentControllerTests,FulfillmentSecurityChainIntegrationTests,FulfillmentSafetyTests' test`; verify RED.
+- [x] Add thin controllers, permission constants and service operations; existing `/api/admin/*` filter/interceptor mappings already protect the paths.
+- [x] Run API/security and lottery security regressions GREEN, document PowerShell operations, check boxes and commit `feat: operate fulfillment tasks`.
 
 ### Task 8: Concurrency, documentation and complete handoff
 
