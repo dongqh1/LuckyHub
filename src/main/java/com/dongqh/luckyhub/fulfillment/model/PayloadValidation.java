@@ -1,0 +1,2 @@
+package com.dongqh.luckyhub.fulfillment.model;
+final class PayloadValidation {private PayloadValidation(){} static String required(String v,String n){if(v==null||v.isBlank())throw new IllegalArgumentException(n+"不能为空");return v.trim();}static int positive(int v,String n){if(v<=0)throw new IllegalArgumentException(n+"必须大于0");return v;}static long positive(long v,String n){if(v<=0)throw new IllegalArgumentException(n+"必须大于0");return v;}}

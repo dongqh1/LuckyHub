@@ -126,11 +126,11 @@ enum SimulatorFailureMode { SUCCESS, RETRYABLE, PERMANENT, UNKNOWN_BEFORE, UNKNO
 **Interfaces:**
 - Produces `create`, `get`, `page`, `retryQuarantined`, `terminate`.
 
-- [ ] Write failing tests for four payload validations, canonical request fingerprint, same-command idempotency, conflicting reuse, snapshots, pagination and source/target identity.
-- [ ] Run `'-Dtest=FulfillmentTaskServiceTests' test`; verify RED.
-- [ ] Implement JSON snapshot/fingerprint creation, unique-key race handling, views and stable errors; creation performs no Gateway call.
-- [ ] Run tests including concurrent duplicate creation GREEN.
-- [ ] Document why creation and execution are separated, check boxes and commit `feat: create fulfillment tasks`.
+- [x] Write failing tests for four payload validations, canonical request fingerprint, same-command idempotency, conflicting reuse, snapshots, pagination and source/target identity.
+- [x] Run `'-Dtest=FulfillmentTaskServiceTests' test`; verify RED.
+- [x] Implement JSON snapshot/fingerprint creation, unique-key race handling, views and stable errors; creation performs no Gateway call.
+- [x] Run tests including concurrent duplicate creation GREEN.
+- [x] Document why creation and execution are separated, check boxes and commit `feat: create fulfillment tasks`.
 
 Required command core:
 

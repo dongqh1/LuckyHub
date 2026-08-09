@@ -1,0 +1,3 @@
+package com.dongqh.luckyhub.fulfillment.vo;
+import com.dongqh.luckyhub.fulfillment.enums.*; import com.dongqh.luckyhub.fulfillment.model.FulfillmentPayload; import java.time.LocalDateTime;
+public record FulfillmentTaskView(Long id,String fulfillmentNo,String sourceType,String sourceId,FulfillmentType fulfillmentType,Long targetUserId,FulfillmentPayload payload,String requestFingerprint,FulfillmentStatus status,Integer attemptCount,Integer maxAttempts,LocalDateTime nextAttemptAt,String externalReference,FailureCategory lastErrorCategory,String lastErrorCode,String lastErrorMessage,LocalDateTime completedAt,LocalDateTime createdAt,LocalDateTime updatedAt){}
