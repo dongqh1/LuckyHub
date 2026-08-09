@@ -372,19 +372,19 @@ public interface LotteryRewardIdentityService {
 
 `ValidatedLotteryReward` contains locked benefit identity and its immutable snapshot; it never contains secrets or mutable current reward configuration.
 
-- [ ] **Step 1: Write failing cross-identity and zero-effect tests**
+- [x] **Step 1: Write failing cross-identity and zero-effect tests**
 
 Mutate each envelope/payload identity separately: request, user, activity, order, benefit, record, prize, definition, type and fingerprint. Each case must create exactly one quarantine/consume record and zero fulfillment tasks, simulator records, points ledgers, coupons, memberships or draw-chance ledgers. Repeat the same event to prove idempotency.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=LotteryRewardIdentityTests,LotteryRewardDispatchTests,LotteryRewardSafetyTests' test`. Expected: current consumer trusts only benefitId and the tests fail.
 
-- [ ] **Step 3: Implement one locked database identity read**
+- [x] **Step 3: Implement one locked database identity read**
 
 Use a join across order, record and benefit keyed by payload benefit ID, then compare every approved field to the envelope/payload. Return the immutable database snapshot only on exact match. Map failures to bounded reason enums such as `ORDER_IDENTITY_MISMATCH`, `RECORD_IDENTITY_MISMATCH`, `BENEFIT_IDENTITY_MISMATCH`, and `REWARD_FINGERPRINT_MISMATCH`.
 
-- [ ] **Step 4: Implement idempotent dispatch**
+- [x] **Step 4: Implement idempotent dispatch**
 
 - Legacy null snapshot: call existing `BenefitFulfillmentService.fulfill(benefitId,eventId)`.
 - `COUPON`, `POINTS`, `MEMBERSHIP`: create `LOTTERY-BENEFIT-{benefitId}` with the matching Phase 4 typed payload, store the fulfillment number, then write consume record.
@@ -392,11 +392,11 @@ Use a join across order, record and benefit keyed by payload benefit ID, then co
 - `DRAW_CHANCE`: `drawChanceService.credit(userId,"LOTTERY-BENEFIT-{benefitId}",quantity)`, conditional `PENDING -> AVAILABLE`, then consume record.
 - Validation failure: insert quarantine and consume records in one transaction and return normally.
 
-- [ ] **Step 5: Run GREEN and legacy fulfillment regressions**
+- [x] **Step 5: Run GREEN and legacy fulfillment regressions**
 
 Run focused tests plus `'-Dtest=BenefitFulfillmentServiceTests,RedisStreamMessagingTests,LotteryEndToEndTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Show a forged user ID event and prove it creates no provider/local effect. Commit `feat: dispatch validated lottery rewards`.
 

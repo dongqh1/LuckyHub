@@ -117,7 +117,7 @@ class RedisStreamMessagingTests {
         assertThat(consumer.pollOnce()).isOne();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM user_benefit WHERE id = ?", String.class, benefitId))
-                .isEqualTo(BenefitStatus.CLAIM_PENDING.name());
+                .isEqualTo(BenefitStatus.PENDING.name());
         assertThat(consumeRecordMapper.selectCount(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord>()
                         .eq(com.dongqh.luckyhub.lottery.entity.MessageConsumeRecord::getEventId,
@@ -296,8 +296,8 @@ class RedisStreamMessagingTests {
                         new PrizeFulfillmentRequestedEvent(1L, 2L, 3L, PrizeType.PHYSICAL)));
         eventIds.add(fulfillment.eventId().toString());
         publisher.publish(fulfillment);
-        assertThat(consumer.pollOnce()).isZero();
-        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isOne();
+        assertThat(consumer.pollOnce()).isOne();
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isZero();
 
         try {
             Thread.sleep(properties.claimIdle().plusMillis(20).toMillis());
@@ -314,7 +314,7 @@ class RedisStreamMessagingTests {
         assertThat(consumer.pollOnce()).isOne();
         assertThat(redisTemplate.opsForHash().get(
                 DrawQuotaKeys.reservation(laterRequest), "status")).isEqualTo("CONFIRMED");
-        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isOne();
+        assertThat(redisTemplate.opsForStream().pending(stream, group).getTotalPendingMessages()).isZero();
     }
 
     @Test

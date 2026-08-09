@@ -243,7 +243,7 @@ class LotteryEndToEndTests {
     }
 
     @Test
-    void fulfillmentUsesBenefitDatabaseTypeInsteadOfTrustingMessagePayloadType() throws Exception {
+    void fulfillmentQuarantinesMessagePayloadTypeThatDisagreesWithDatabase() throws Exception {
         Fixture fixture = prizeActivity(1, 100, 1, 0, 10);
         String requestId = requestId();
         DrawOrderView draw = lotteryService.draw(new DrawCommand(requestId, fixture.activityId(), 1));
@@ -260,7 +260,8 @@ class LotteryEndToEndTests {
         consumeService.consume(tampered);
 
         assertThat(jdbc.queryForObject("SELECT CONCAT(prize_type, ':', status) FROM user_benefit WHERE id=?",
-                String.class, benefitId)).isEqualTo("COUPON:AVAILABLE");
+                String.class, benefitId)).isEqualTo("COUPON:PENDING");
+        assertThat(count("lottery_reward_quarantine", "event_id=?", stored.eventId().toString())).isOne();
     }
 
     @Test

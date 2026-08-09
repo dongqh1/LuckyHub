@@ -1,0 +1,11 @@
+package com.dongqh.luckyhub.lottery.enums;
+
+public enum RewardQuarantineReason {
+    IDENTITY_NOT_FOUND,
+    ORDER_IDENTITY_MISMATCH,
+    RECORD_IDENTITY_MISMATCH,
+    BENEFIT_IDENTITY_MISMATCH,
+    REWARD_DEFINITION_MISMATCH,
+    REWARD_TYPE_MISMATCH,
+    REWARD_FINGERPRINT_MISMATCH
+}

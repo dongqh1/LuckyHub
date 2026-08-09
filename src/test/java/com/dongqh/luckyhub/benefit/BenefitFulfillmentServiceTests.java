@@ -5,6 +5,7 @@ import com.dongqh.luckyhub.benefit.enums.BenefitStatus;
 import com.dongqh.luckyhub.benefit.handler.BenefitFulfillmentHandler;
 import com.dongqh.luckyhub.benefit.handler.BenefitFulfillmentRouter;
 import com.dongqh.luckyhub.benefit.handler.CouponFulfillmentHandler;
+import com.dongqh.luckyhub.benefit.handler.DrawChanceFulfillmentHandler;
 import com.dongqh.luckyhub.benefit.handler.MembershipFulfillmentHandler;
 import com.dongqh.luckyhub.benefit.handler.PhysicalFulfillmentHandler;
 import com.dongqh.luckyhub.benefit.handler.PointsFulfillmentHandler;
@@ -208,7 +209,7 @@ class BenefitFulfillmentServiceTests {
     private BenefitFulfillmentService serviceWith(BenefitFulfillmentHandler coupon) {
         BenefitFulfillmentRouter router = new BenefitFulfillmentRouter(List.of(
                 coupon, new PointsFulfillmentHandler(), new MembershipFulfillmentHandler(),
-                new PhysicalFulfillmentHandler()));
+                new PhysicalFulfillmentHandler(), new DrawChanceFulfillmentHandler()));
         return new BenefitFulfillmentServiceImpl(benefitMapper, consumeRecordMapper, router,
                 properties(), transactionManager);
     }

@@ -1,7 +1,6 @@
 package com.dongqh.luckyhub.lottery.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.dongqh.luckyhub.benefit.service.BenefitFulfillmentService;
 import com.dongqh.luckyhub.common.exception.BusinessException;
 import com.dongqh.luckyhub.drawchance.enums.DrawChanceErrorCode;
 import com.dongqh.luckyhub.drawchance.service.DrawChanceService;
@@ -27,7 +26,7 @@ public class MessageConsumeService {
     private final MessageConsumeRecordMapper consumeRecordMapper;
     private final DrawQuotaService quotaService;
     private final DrawChanceService drawChanceService;
-    private final BenefitFulfillmentService benefitFulfillmentService;
+    private final LotteryRewardDispatchService rewardDispatchService;
     private final ObjectMapper objectMapper;
     private final String logicalConsumerName;
     private final TransactionTemplate transactionTemplate;
@@ -36,14 +35,14 @@ public class MessageConsumeService {
             MessageConsumeRecordMapper consumeRecordMapper,
             DrawQuotaService quotaService,
             DrawChanceService drawChanceService,
-            BenefitFulfillmentService benefitFulfillmentService,
+            LotteryRewardDispatchService rewardDispatchService,
             ObjectMapper objectMapper,
             MessagingProperties properties,
             PlatformTransactionManager transactionManager) {
         this.consumeRecordMapper = consumeRecordMapper;
         this.quotaService = quotaService;
         this.drawChanceService = drawChanceService;
-        this.benefitFulfillmentService = benefitFulfillmentService;
+        this.rewardDispatchService = rewardDispatchService;
         this.objectMapper = objectMapper;
         this.logicalConsumerName = properties.logicalConsumerName();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -74,7 +73,7 @@ public class MessageConsumeService {
             case PRIZE_FULFILLMENT_REQUESTED -> {
                 var payload = event.payloadAs(
                         PrizeFulfillmentRequestedEvent.class, objectMapper);
-                benefitFulfillmentService.fulfill(payload.benefitId(), eventId);
+                rewardDispatchService.dispatch(event, payload);
                 return;
             }
         }
