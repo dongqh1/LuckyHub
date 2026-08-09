@@ -2,3 +2,4 @@
 docs/AccessKey*.csv
 target/
 .idea/
+.worktrees/
