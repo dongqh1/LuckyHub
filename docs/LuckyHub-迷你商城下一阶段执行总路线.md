@@ -1,268 +1,90 @@
 # LuckyHub 迷你商城下一阶段执行总路线
 
 > 更新时间：2026-08-09
-> 用途：下一次开发会话的唯一入口。先恢复环境和仓库状态，再进入当前阶段计划。  
-> 已批准设计：`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`
+> 用途：下一次开发会话的唯一入口。
 
-## 1. 明天从这里开始
+## 1. 当前结论
 
-新会话直接输入：
+阶段 1–5 已完成。当前唯一主线是：
+
+> **阶段 6：实物领取、收货地址快照和物流履约。**
+
+阶段 5 已把抽奖奖励统一为五类真实流程：优惠券、积分、会员、实物和奖励抽奖次数。实物目前故意停在 `CLAIM_PENDING`，没有提前创建物流任务。
+
+## 2. 下次直接这样开始
 
 ```text
-请先读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
-再执行其中“恢复检查”，然后从阶段 5 的设计开始：把抽奖奖励迁移到统一履约。
-阶段 5 设计确认前不要改抽奖主流程，不要实现阶段 6 地址物流，不要修改已经发布的 V1-V15。
+请先读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和
+docs/LuckyHub-开发进度交接总结.md，执行恢复检查，然后为阶段 6
+“实物领取、地址快照与物流履约”先写设计规格；规格确认前不要改代码。
 ```
 
 恢复检查：
 
 ```powershell
 git status --short --branch
-git log -5 --oneline
-git rev-list --left-right --count origin/master...master
+git log -8 --oneline
 docker compose ps
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 ```
 
-如果 Docker Desktop 没有运行，先启动 Docker Desktop，再执行：
+`.codex-progress/` 和 `.superpowers/` 是用户的未跟踪辅助目录，不要提交或删除。
 
-```powershell
-docker compose up -d
-docker compose ps
-```
-
-只有 MySQL、Redis 健康且全量测试通过后，才能开始修改代码。如果测试因环境失败，先修复环境，不把失败基线带入新功能。
-
-## 2. 当前仓库基线
-
-- 分支：`master`；
-- 已批准设计提交：`18b6ad8 docs: design lottery mini mall`；
-- 现有抽奖核心、Outbox、Redis Stream、权益占位处理器保持可用；
-- V1-V15 是已发布迁移，后续变更只能新增 V16 及之后的迁移；
-- 阶段 1 功能基线：`90257bb feat: expose channel inventory API`；
-- 阶段 2 功能基线：`69dff03 feat: expose points redemption API`；
-- 阶段 3 安全基线：`4c44564 test: prove phase three commerce safety`；
-- 阶段 4 功能基线：`b955099 feat: operate fulfillment tasks`；
-- `.codex-progress/` 和 `.superpowers/` 是未跟踪辅助目录，不要提交；
-- Windows + PowerShell 7 + Java 17；
-- Maven 统一通过 `scripts/Invoke-Maven.ps1` 执行。
-
-## 3. 当前阶段
-
-阶段 1、阶段 2、阶段 3、阶段 4 已完成。当前下一阶段为设计状态：
-
-> **阶段 5：抽奖奖励迁移到统一履约（尚未开始）**
-
-规划输入：
+## 3. 已完成阶段
 
 ```text
-docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md
-docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md
-docs/catalog-reward-inventory-api.md
+阶段 1：商品、统一奖励定义、渠道库存
+阶段 2：积分账户、不可变流水、积分兑换
+阶段 3：优惠券、会员、现金订单、模拟支付
+阶段 4：统一异步履约、四类本地模拟供应方
+阶段 5：抽奖奖励快照、身份隔离、奖励次数、资产投影、五类端到端
 ```
 
-阶段 2 已完成计划与 API：
+阶段 5 入口文档：
 
 ```text
-docs/superpowers/plans/2026-08-08-points-account-redemption.md
-docs/points-redemption-api.md
+docs/superpowers/plans/2026-08-09-lottery-unified-reward-fulfillment.md
+docs/lottery-reward-fulfillment-api.md
+docs/progress/阶段5-任务9-阶段交付完成介绍.md
 ```
 
-阶段 2 最终完成介绍：
+## 4. 当前可运行基线
 
-```text
-docs/progress/阶段2-任务8-阶段交付完成介绍.md
-```
+- Java 17、Spring Boot、MyBatis-Plus、MySQL、Redis；
+- Flyway 已到 V16；
+- 43 张业务表；
+- 全量测试 407 项，失败 0、错误 0、跳过 0；
+- 可执行 JAR：`target/luckyhub-0.0.1-SNAPSHOT.jar`；
+- JAR 大小：69,748,317 字节；
+- OpenAPI 冒烟已验证抽奖、权益和奖励定义端点；
+- 空库脚本：`scripts/Verify-Phase5FreshMigration.ps1`。
 
-阶段 3 已完成计划、API 和最终说明：
+## 5. 阶段 6 必须设计的内容
 
-```text
-docs/superpowers/plans/2026-08-08-coupon-membership-cash-order.md
-docs/coupon-membership-order-api.md
-docs/progress/阶段3-任务8-阶段交付完成介绍.md
-```
+1. 用户中奖后在领取期限内提交收货地址；
+2. 地址必须形成不可变快照，后续修改地址簿不能改变已领取订单；
+3. `CLAIM_PENDING -> CLAIMED -> FULFILLING -> SHIPPED/DELIVERED` 状态机；
+4. 只有领取成功后才创建 `LOGISTICS` 履约任务；
+5. 物流履约号、地址提交和运单回调都要幂等；
+6. 超时未领取、履约失败、人工重试/终止和隐私脱敏；
+7. 物流查询只返回必要信息，手机号和详细地址不能进入日志或错误摘要；
+8. 继续使用本地模拟物流，真实供应商通过可替换 Gateway 接入；
+9. 空库迁移、并发领取、重复回调和可执行 JAR 验收。
 
-阶段 4 已完成计划、API 和最终说明：
+## 6. 阶段 6 明确不能破坏的边界
 
-```text
-docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md
-docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md
-docs/fulfillment-gateway-api.md
-docs/progress/阶段4-任务8-阶段交付完成介绍.md
-```
+- 不修改已发布的 V1–V16，只新增 V17 及以后迁移；
+- 不改变五类奖励冻结快照和身份交叉校验；
+- 不让实物中奖时直接创建物流任务；
+- 不把明文地址、手机号、密钥写入事件、日志或履约安全错误；
+- 不删除旧权益字段，新字段继续保持向后兼容；
+- 不把本地模拟供应方写死到业务服务，保留 Gateway 替换能力。
 
-下一次开发先设计阶段 5：将抽奖奖励在同一业务事务中可靠创建 `fulfillment_task`，逐步替换旧 `BenefitFulfillmentHandler` 占位发放；必须保持现有抽奖幂等、Outbox、库存和配额语义。阶段 5 不实现用户地址、真实包裹或物流轨迹。
+## 7. 推荐读取顺序
 
-阶段 4 验收证据：V1→V15 空库迁移成功并清理临时授权/数据库；阶段 4 聚焦测试 34/34；全量回归 371/371；JAR 69,662,414 字节；四类 Gateway、四套模拟供应方、租约、事务外调用、指数退避、对账、隔离与 6 个管理 API 可运行；Critical 0，Important 0。
-
-阶段 3 验收证据：V1→V13 空库迁移 3/3、阶段三聚焦测试 24/24、全量回归 336/336、打包成功，JAR 69,561,901 字节，OpenAPI 冒烟验证 5 个关键路径通过；Critical 0，Important 0。
-
-阶段 2 验收证据：
-
-- 功能基线：`69dff03 feat: expose points redemption API`；
-- V10 从空数据库随 V1-V9 依次迁移成功；
-- 空库迁移契约：17 个测试，0 失败，0 错误；
-- 阶段 2 聚焦测试：44 个测试，0 失败，0 错误；
-- 全量回归：312 个测试，0 失败，0 错误；
-- 打包：`BUILD SUCCESS`，JAR 69,445,276 字节；
-- 审查：Critical 0，Important 0；
-- API：`docs/points-redemption-api.md`。
-
-阶段 1 验收证据：
-
-- 功能基线：`90257bb feat: expose channel inventory API`；
-- V8/V9 从空数据库随 V1-V7 依次迁移成功；
-- 空库迁移契约：14 个测试，0 失败，0 错误；
-- 阶段 1 聚焦测试：39 个测试，0 失败，0 错误；
-- 全量回归：274 个测试，0 失败，0 错误；
-- 打包：`BUILD SUCCESS`，生成 `target/luckyhub-0.0.1-SNAPSHOT.jar`；
-- 审查：Critical 0，Important 0；
-- 阶段 1 API：`docs/catalog-reward-inventory-api.md`；
-- 阶段 1 完成介绍：`docs/progress/阶段1-任务8-阶段交付完成介绍.md`。
-
-## 4. 六阶段执行顺序
-
-### 阶段 1：商品、统一奖励与渠道库存基础（已完成）
-
-交付：
-
-- 商品与 SKU；
-- 现金价、积分兑换价和可用购买方式；
-- 统一奖励定义；
-- 总库存、渠道库存、预占记录和库存流水；
-- 管理 API 和权限；
-- 与现有抽奖兼容的可空关联字段。
-
-阶段验收后，依据真实接口签名编写阶段 2 计划。
-
-### 阶段 2：积分账户与积分商城（已完成）
-
-依赖：阶段 1 的 SKU、积分兑换价和渠道库存。
-
-交付：
-
-- 用户积分账户；
-- 不可变积分流水；
-- 幂等入账、条件扣减和冲正；
-- 积分兑换单；
-- 积分兑换库存预占、确认和释放；
-- 用户余额/流水 API；
-- 管理员积分调整 API。
-
-完成定义：并发扣减不出现负余额；重复业务号不重复记账；兑换失败通过反向流水恢复积分和库存。
-
-### 阶段 3：优惠券、会员与现金订单（已完成）
-
-依赖：阶段 1 的商品、SKU、渠道库存；阶段 2 的积分账户只作为未来消费返积分基础，不参与混合支付。
-
-交付：
-
-- 优惠券模板和用户券包；
-- 锁券、核销、释放和过期；
-- 月卡、季卡、年卡及有效期顺延；
-- 固定价格顺序：商品原价 → 会员折扣 → 优惠券 → 应付金额；
-- 单 SKU 立即购买订单；
-- 模拟支付单、回调和支付超时；
-- 订单价格快照。
-
-完成定义：重复支付回调不重复确认订单；取消和超时释放券及库存；历史订单不受商品、券或会员规则修改影响。
-
-### 阶段 4：统一异步履约底座与模拟外部系统（已完成）
-
-依赖：阶段 2、3 已有真实的积分、券和会员领域入口。
-
-交付：
-
-- `fulfillment_task`、`fulfillment_attempt` 和隔离记录；
-- 稳定 `fulfillment_no`；
-- `CouponGateway`、`PointsGateway`、`MembershipGateway`、`LogisticsGateway`；
-- 四套幂等模拟系统；
-- 事务外远程调用；
-- 可重试、永久失败、结果未知分类；
-- 指数退避、最大尝试次数、DLQ/quarantine、人工重试和主动对账。
-
-完成结果：模拟第三方成功但本地超时通过 `QUERY` 完成且只有一次外部效果；永久失败和达到上限的任务进入 quarantine；每次调用均有安全尝试流水。阶段 4 自身不消费 Redis Stream，抽奖 Stream 迁移留给阶段 5。
-
-### 阶段 5：抽奖奖励迁移到统一履约
-
-依赖：阶段 4 的统一履约任务和 Gateway。
-
-交付：
-
-- 活动奖项引用 `reward_definition`；
-- 抽奖可发商品、积分、券、会员和抽奖资格；
-- 完整事件身份交叉校验；
-- 现有历史中奖记录和权益查询兼容；
-- 旧 `PrizeType` 路径有明确迁移或退役策略。
-
-完成定义：五种奖励均有端到端测试；事件身份不一致时不调用模拟系统并进入隔离处理。
-
-### 阶段 6：实物领奖与模拟物流
-
-依赖：阶段 5 可产生商品型奖励；阶段 4 有 `LogisticsGateway`。
-
-交付：
-
-- 用户地址簿；
-- 加密地址和脱敏响应；
-- 抽奖实物零元订单；
-- 领奖截止时间和超时回补规则；
-- 发货单、运单号、物流轨迹；
-- 回调验签模拟和主动查询；
-- `SHIPPED`、`IN_TRANSIT`、`DELIVERED` 状态闭环。
-
-完成定义：抽中实物后可以确认地址、模拟发货和签收；越权用户无法读取他人地址；日志不出现地址明文。
-
-## 5. 每阶段固定工作方式
-
-每个阶段都遵守：
-
-1. 先阅读已批准设计和本阶段计划；
-2. 按计划使用 TDD：失败测试 → 最小实现 → 测试通过；
-3. 一个可审查任务一个提交；
-4. 每个迁移先写 schema contract；
-5. 每个资产变化必须有业务幂等号和流水；
-6. 外部调用不得持有数据库事务或行锁；
-7. 单项测试通过后再跑相关包测试；
-8. 阶段结束运行全量测试和打包；
-9. 完成代码审查后再更新本路线的当前阶段；
-10. 不在同一提交混入下一阶段代码。
-
-验证命令模板：
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 `
-  '-Dtest=完整测试类名' test
-
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
-
-pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'
-```
-
-## 6. 关键约束
-
-- 抽奖是核心，商城保持最小范围；
-- 不做购物车、真实支付、退款售后、积分现金混合支付；
-- 金额统一使用整数分，积分统一使用整数；
-- 积分不能兑换现金或提现；
-- 积分兑换不使用现金优惠券或会员价格折扣，也不返积分；
-- 会员折扣先于优惠券计算；
-- 商城、积分兑换和抽奖库存不自动互借；
-- 数据库是资产与订单最终事实来源；
-- Redis 不保存最终积分、券、会员或订单账本；
-- 历史记录使用快照，不能被当前配置覆盖；
-- 所有模拟外部能力必须经 Gateway，禁止直接修改业务表伪装远程成功。
-
-## 7. 阶段切换规则
-
-只有同时满足以下条件才进入下一阶段：
-
-- 本阶段计划中的复选框全部完成；
-- 相关测试和全量测试通过；
-- `git diff --check` 无错误；
-- tracked 工作区干净；
-- 文档与真实接口一致；
-- 完成本阶段代码审查；
-- 本路线已更新当前阶段和最新验收证据。
-
-如果某阶段发现设计需要改变，先更新设计文档并取得确认，再调整实施计划；不要在代码中临时发明新的业务规则。
+1. 本文档；
+2. `docs/LuckyHub-开发进度交接总结.md`；
+3. `docs/lottery-reward-fulfillment-api.md`；
+4. `docs/fulfillment-gateway-api.md`；
+5. `docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`；
+6. 阶段 6 新设计与计划（创建后）。

@@ -79,6 +79,7 @@ class LotteryFiveRewardEndToEndTests {
         when(random.nextLong(anyLong())).thenReturn(0L);
         userId = insert("INSERT INTO sys_user(username,password,nickname,status) VALUES(?,?,?,1)",
                 marker, "x", "五类奖励用户");
+        jdbc.update("INSERT INTO sys_user_role(user_id,role_id) SELECT ?,id FROM sys_role WHERE role_code='USER'", userId);
         LoginContext.set(new LoginPrincipal(userId, marker, "phase5-session"));
     }
 
@@ -131,6 +132,7 @@ class LotteryFiveRewardEndToEndTests {
         jdbc.update("DELETE FROM product WHERE product_code LIKE ?", marker + "%");
         jdbc.update("DELETE FROM coupon_template WHERE template_code LIKE ?", marker + "%");
         jdbc.update("DELETE FROM membership_product WHERE product_code LIKE ?", marker + "%");
+        jdbc.update("DELETE FROM sys_user_role WHERE user_id=?", userId);
         jdbc.update("DELETE FROM sys_user WHERE id=?", userId);
     }
 

@@ -525,11 +525,11 @@ Explain all five timelines with examples. Commit `test: verify five lottery rewa
 **Interfaces:**
 - Produces a runnable V1-V16 project and makes Phase 6 address/shipping workflow the only next mainline.
 
-- [ ] **Step 1: Update global migration guards and create a safe fresh-schema script**
+- [x] **Step 1: Update global migration guards and create a safe fresh-schema script**
 
 Assert V16 and exactly 43 business tables. The PowerShell script must generate a random `luckyhub_phase5_verify_<guid>` name, create it separately from granting, track whether creation succeeded, run schema tests, verify `16|43`, and in `finally` revoke only that grant and drop only that created schema; cleanup failure must fail the script.
 
-- [ ] **Step 2: Run fresh migration and focused concurrency**
+- [x] **Step 2: Run fresh migration and focused concurrency**
 
 Run:
 
@@ -540,7 +540,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest
 
 Record exact successes and verify no `luckyhub_phase5_verify_%` schema remains.
 
-- [ ] **Step 3: Run full regression and package**
+- [x] **Step 3: Run full regression and package**
 
 Run fresh commands, not cached claims:
 
@@ -551,15 +551,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package
 
 Require zero failures/errors/skips unless a test explicitly documents an intentional skip. Record exact test count and JAR byte size.
 
-- [ ] **Step 4: Run executable JAR OpenAPI smoke and static delivery checks**
+- [x] **Step 4: Run executable JAR OpenAPI smoke and static delivery checks**
 
 Start `target/luckyhub-0.0.1-SNAPSHOT.jar` on a free local port with the configured MySQL/Redis, wait for `/v3/api-docs`, assert lottery/reward/benefit endpoints exist, then stop only that process. Run `git diff --check`, strict UTF-8 decoding, Markdown local-link validation, tracked secret-shape scan, actual Phase 5 checkbox scan, and confirm all 9 task documents exist.
 
-- [ ] **Step 5: Perform final requirement/code review**
+- [x] **Step 5: Perform final requirement/code review**
 
 Review the full diff from `bc5ccd0` for Critical/Important issues in identity validation, transaction boundaries, provider idempotency, projection idempotency, draw-chance accounting, secret leakage and Phase 6 scope. Reproduce every found defect with a failing test before fixing it, then rerun affected and full verification.
 
-- [ ] **Step 6: Update handoff, check all boxes, document and commit**
+- [x] **Step 6: Update handoff, check all boxes, document and commit**
 
 Mark Phase 5 complete, record V16/43 tables, exact tests/JAR/OpenAPI results and known boundaries, and make Phase 6 the next route. Commit `docs: hand off phase five lottery rewards`.
 
