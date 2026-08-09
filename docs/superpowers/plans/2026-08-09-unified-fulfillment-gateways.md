@@ -72,11 +72,11 @@ enum FulfillmentType { COUPON, POINTS, MEMBERSHIP, LOGISTICS }
 - Produces `CouponGateway`, `PointsGateway`, `MembershipGateway`, `LogisticsGateway`, typed request records and `GatewayResult`.
 - Each port exposes `execute(request)` and `query(fulfillmentNo)`.
 
-- [ ] Write contract tests that construct all four typed requests, require masked logistics validation, and verify immutable normalized results.
-- [ ] Run `'-Dtest=GatewayContractTests' test`; verify RED for missing Gateway types.
-- [ ] Implement four narrow interfaces, `GatewayResult`, `GatewayOutcome`, request validation and `FulfillmentPayload` conversion without a generic unvalidated Map.
-- [ ] Run contract tests GREEN; document a future real-provider replacement example.
-- [ ] Check boxes and commit `feat: define fulfillment gateways`.
+- [x] Write contract tests that construct all four typed requests, require masked logistics validation, and verify immutable normalized results.
+- [x] Run `'-Dtest=GatewayContractTests' test`; verify RED for missing Gateway types.
+- [x] Implement four narrow interfaces, `GatewayResult`, `GatewayOutcome`, request validation and strongly typed request conversion without a generic unvalidated Map.
+- [x] Run contract tests GREEN; document a future real-provider replacement example.
+- [x] Check boxes and commit `feat: define fulfillment gateways`.
 
 Required signatures:
 
