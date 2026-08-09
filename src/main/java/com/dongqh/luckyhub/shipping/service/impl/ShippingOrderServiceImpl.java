@@ -104,6 +104,8 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
         ShippingOrder order = mapper.selectOne(new LambdaQueryWrapper<ShippingOrder>()
                 .eq(ShippingOrder::getFulfillmentNo, required(fulfillmentNo)));
         if (order == null) return;
+        ShippingStatus observedStatus = order.getStatus();
+        Integer observedVersion = order.getVersion();
         FulfillmentTaskView task = fulfillmentTasks.get(fulfillmentNo);
         LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
         if (task.status() == FulfillmentStatus.SUCCEEDED) {
@@ -145,11 +147,14 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
                 SET carrier_code=?, carrier_name=?, waybill_no=?, status=?,
                     last_error_code=?, last_error_message=?, shipped_at=?, failed_at=?,
                     terminated_at=?, version=version+1, updated_at=CURRENT_TIMESTAMP(3)
-                WHERE id=?
+                WHERE id=? AND version=? AND status=?
                 """, order.getCarrierCode(), order.getCarrierName(), order.getWaybillNo(),
                 order.getStatus().name(), order.getLastErrorCode(), order.getLastErrorMessage(),
-                order.getShippedAt(), order.getFailedAt(), order.getTerminatedAt(), order.getId()) != 1) {
-            throw error(ShippingErrorCode.SHIPPING_STATE_CONFLICT);
+                order.getShippedAt(), order.getFailedAt(), order.getTerminatedAt(), order.getId(),
+                observedVersion, observedStatus.name()) != 1) {
+            // Another state transition won the race. Its newer projection is authoritative;
+            // a later scheduler pass can converge any still-applicable fulfillment state.
+            return;
         }
         projectLotterySource(order);
     }
