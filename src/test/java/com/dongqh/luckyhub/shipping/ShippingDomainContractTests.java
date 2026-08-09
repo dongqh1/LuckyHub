@@ -64,8 +64,8 @@ class ShippingDomainContractTests {
     void exposesSafeBoundedShippingErrors() {
         assertThat(ShippingErrorCode.class.getInterfaces()).contains(ErrorCode.class);
         assertThat(Arrays.stream(ShippingErrorCode.values()).map(ErrorCode::code))
-                .containsExactly(53001, 53002, 53003, 53004, 53005, 53006,
-                        53007, 53008, 53009, 53010, 53011, 53012);
+                .containsExactly(55001, 55002, 55003, 55004, 55005, 55006,
+                        55007, 55008, 55009, 55010, 55011, 55012);
         assertThat(Arrays.stream(ShippingErrorCode.values()).map(ErrorCode::message))
                 .containsExactly(
                         "收货地址不存在", "无权访问该收货地址", "收货地址参数不合法", "收货地址状态冲突",
