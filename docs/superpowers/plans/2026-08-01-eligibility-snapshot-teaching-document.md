@@ -216,7 +216,7 @@ ActivityPrizeInventoryServiceImpl.decrementIfAvailable：activityPrizeId、受�
 在现有 `LuckyHub-抽奖核心流程实现详解.md` 链接之后增加两行说明，链接到：
 
 ```markdown
-[`docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md`](docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md)
+[`docs/LuckyHub-抽奖资格快照EligibilitySnapshot详解.md`](../../LuckyHub-抽奖资格快照EligibilitySnapshot详解.md)
 ```
 
 - [ ] **Step 2: 执行占位符和关键事实扫描**

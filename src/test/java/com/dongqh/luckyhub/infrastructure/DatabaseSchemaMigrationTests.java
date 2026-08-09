@@ -62,7 +62,15 @@ class DatabaseSchemaMigrationTests {
             "user_membership",
             "membership_grant_record",
             "mall_order",
-            "payment_order"
+            "payment_order",
+            "fulfillment_task",
+            "fulfillment_attempt",
+            "fulfillment_quarantine",
+            "sim_coupon_record",
+            "sim_points_record",
+            "sim_membership_record",
+            "sim_logistics_record",
+            "sim_failure_rule"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -93,7 +101,20 @@ class DatabaseSchemaMigrationTests {
             "user_membership:user_id",
             "membership_grant_record:business_no",
             "mall_order:order_no",
-            "payment_order:payment_no"
+            "payment_order:payment_no",
+            "fulfillment_task:fulfillment_no",
+            "fulfillment_attempt:task_id,sequence_no",
+            "fulfillment_quarantine:task_id",
+            "fulfillment_quarantine:fulfillment_no",
+            "sim_coupon_record:fulfillment_no",
+            "sim_coupon_record:external_reference",
+            "sim_points_record:fulfillment_no",
+            "sim_points_record:external_reference",
+            "sim_membership_record:fulfillment_no",
+            "sim_membership_record:external_reference",
+            "sim_logistics_record:fulfillment_no",
+            "sim_logistics_record:external_reference",
+            "sim_failure_rule:fulfillment_type"
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -185,6 +206,16 @@ class DatabaseSchemaMigrationTests {
                 """, Integer.class);
 
         assertThat(successfulMigrations).isEqualTo(1);
+    }
+
+    @Test
+    void addsFulfillmentEngineAndSimulatorsThroughVersionFifteen() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version IN ('14', '15') AND success = 1
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isEqualTo(2);
     }
 
     @Test

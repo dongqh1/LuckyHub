@@ -72,7 +72,14 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 阶段 3 的已完成实施记录见
 [`docs/superpowers/plans/2026-08-08-coupon-membership-cash-order.md`](docs/superpowers/plans/2026-08-08-coupon-membership-cash-order.md)。
 
-当前数据库迁移已到 V13。可运行产物使用以下命令生成和启动：
+阶段 4 统一异步履约、四套模拟供应方、故障注入、人工操作和 PowerShell 示例见
+[`docs/fulfillment-gateway-api.md`](docs/fulfillment-gateway-api.md)。
+
+阶段 4 的已完成设计与实施记录见
+[`docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md`](docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md) 和
+[`docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md`](docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md)。
+
+当前数据库迁移已到 V15。可运行产物使用以下命令生成和启动：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'

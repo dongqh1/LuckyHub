@@ -1,6 +1,6 @@
 # LuckyHub 迷你商城下一阶段执行总路线
 
-> 更新时间：2026-08-08  
+> 更新时间：2026-08-09
 > 用途：下一次开发会话的唯一入口。先恢复环境和仓库状态，再进入当前阶段计划。  
 > 已批准设计：`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`
 
@@ -10,8 +10,8 @@
 
 ```text
 请先读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md，
-再执行其中“恢复检查”，然后根据“当前阶段”的规划输入编写阶段 4 实施计划。
-计划确认前不要写阶段 4 代码，不要跳到后续阶段，不要修改已经发布的 V1-V13。
+再执行其中“恢复检查”，然后从阶段 5 的设计开始：把抽奖奖励迁移到统一履约。
+阶段 5 设计确认前不要改抽奖主流程，不要实现阶段 6 地址物流，不要修改已经发布的 V1-V15。
 ```
 
 恢复检查：
@@ -38,19 +38,20 @@ docker compose ps
 - 分支：`master`；
 - 已批准设计提交：`18b6ad8 docs: design lottery mini mall`；
 - 现有抽奖核心、Outbox、Redis Stream、权益占位处理器保持可用；
-- V1-V13 是已发布迁移，后续变更只能新增 V14 及之后的迁移；
+- V1-V15 是已发布迁移，后续变更只能新增 V16 及之后的迁移；
 - 阶段 1 功能基线：`90257bb feat: expose channel inventory API`；
 - 阶段 2 功能基线：`69dff03 feat: expose points redemption API`；
 - 阶段 3 安全基线：`4c44564 test: prove phase three commerce safety`；
+- 阶段 4 功能基线：`b955099 feat: operate fulfillment tasks`；
 - `.codex-progress/` 和 `.superpowers/` 是未跟踪辅助目录，不要提交；
 - Windows + PowerShell 7 + Java 17；
 - Maven 统一通过 `scripts/Invoke-Maven.ps1` 执行。
 
 ## 3. 当前阶段
 
-阶段 1、阶段 2、阶段 3 已完成。当前下一阶段为规划状态：
+阶段 1、阶段 2、阶段 3、阶段 4 已完成。当前下一阶段为设计状态：
 
-> **阶段 4：统一异步履约底座与模拟外部系统（仅规划，尚未写代码）**
+> **阶段 5：抽奖奖励迁移到统一履约（尚未开始）**
 
 规划输入：
 
@@ -81,7 +82,18 @@ docs/coupon-membership-order-api.md
 docs/progress/阶段3-任务8-阶段交付完成介绍.md
 ```
 
-下一次开发先依据总体设计和阶段 1～3 的真实接口编写阶段 4 详细实施计划，交用户确认后再编码。阶段 4 只做统一履约任务、可替换 Gateway 和模拟外部系统，不提前改造抽奖奖励，也不实现地址物流界面。
+阶段 4 已完成计划、API 和最终说明：
+
+```text
+docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md
+docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md
+docs/fulfillment-gateway-api.md
+docs/progress/阶段4-任务8-阶段交付完成介绍.md
+```
+
+下一次开发先设计阶段 5：将抽奖奖励在同一业务事务中可靠创建 `fulfillment_task`，逐步替换旧 `BenefitFulfillmentHandler` 占位发放；必须保持现有抽奖幂等、Outbox、库存和配额语义。阶段 5 不实现用户地址、真实包裹或物流轨迹。
+
+阶段 4 验收证据：V1→V15 空库迁移成功并清理临时授权/数据库；阶段 4 聚焦测试 34/34；全量回归 371/371；JAR 69,662,414 字节；四类 Gateway、四套模拟供应方、租约、事务外调用、指数退避、对账、隔离与 6 个管理 API 可运行；Critical 0，Important 0。
 
 阶段 3 验收证据：V1→V13 空库迁移 3/3、阶段三聚焦测试 24/24、全量回归 336/336、打包成功，JAR 69,561,901 字节，OpenAPI 冒烟验证 5 个关键路径通过；Critical 0，Important 0。
 
@@ -155,7 +167,7 @@ docs/progress/阶段3-任务8-阶段交付完成介绍.md
 
 完成定义：重复支付回调不重复确认订单；取消和超时释放券及库存；历史订单不受商品、券或会员规则修改影响。
 
-### 阶段 4：统一异步履约底座与模拟外部系统
+### 阶段 4：统一异步履约底座与模拟外部系统（已完成）
 
 依赖：阶段 2、3 已有真实的积分、券和会员领域入口。
 
@@ -169,7 +181,7 @@ docs/progress/阶段3-任务8-阶段交付完成介绍.md
 - 可重试、永久失败、结果未知分类；
 - 指数退避、最大尝试次数、DLQ/quarantine、人工重试和主动对账。
 
-完成定义：模拟第三方成功但本地超时不会重复发放；毒消息不会永久堵塞 Redis Stream；每次调用都有安全流水。
+完成结果：模拟第三方成功但本地超时通过 `QUERY` 完成且只有一次外部效果；永久失败和达到上限的任务进入 quarantine；每次调用均有安全尝试流水。阶段 4 自身不消费 Redis Stream，抽奖 Stream 迁移留给阶段 5。
 
 ### 阶段 5：抽奖奖励迁移到统一履约
 

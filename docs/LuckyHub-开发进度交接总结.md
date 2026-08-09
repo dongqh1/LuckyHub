@@ -1,16 +1,16 @@
 # LuckyHub 开发进度交接总结
 
-> 更新时间：2026-08-08
+> 更新时间：2026-08-09
 >
 > 用途：压缩聊天上下文，供下次开发直接读取。
 >
 > 项目目录：`E:\ANotes\software\luckyhub`
 
-🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1/2/3（截至 2026-08-08）
+🎉 LuckyHub 抽奖核心 + 迷你商城阶段 1/2/3/4（截至 2026-08-09）
 
-Progress：抽奖核心保持可用；阶段 1 已完成商品与渠道库存；阶段 2 已完成积分账户与积分兑换；阶段 3 已完成优惠券、会员、现金订单、模拟支付、V11～V13 和商业 API。下一步是阶段 4 统一异步履约底座与可替换模拟 Gateway。
+Progress：抽奖核心保持可用；阶段 1～3 商城领域保持可用；阶段 4 已完成统一异步履约、四类 Gateway、四套本地模拟供应方、租约 Worker、重试对账、隔离和管理 API，数据库到 V15。下一步是阶段 5 把抽奖奖励迁移到统一履约。
 
-Plans：阶段 1/2/3 必做任务为零。下一步仅编写和确认阶段 4 实施计划；尚未开始阶段 4 代码。
+Plans：阶段 1/2/3/4 必做任务为零。下一步先设计和确认阶段 5，不提前实现阶段 6 地址与物流闭环。
 
 Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpowers`/`.codex-progress` 过程文件，未提交、不影响运行。
 
@@ -23,8 +23,8 @@ Problems：无 Critical/Important 阻断；工作区保留未跟踪的 `.superpo
 ```text
 请先读取 docs/LuckyHub-开发进度交接总结.md，
 再执行 git status --short 和 git log -5 --oneline，
-然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 2 已完成计划，
-根据真实接口编写阶段 4 详细计划；计划确认前不直接写阶段 4 代码。
+然后读取 docs/LuckyHub-迷你商城下一阶段执行总路线.md 和阶段 4 已完成计划，
+根据真实接口设计阶段 5 抽奖奖励迁移；设计确认前不改抽奖主流程。
 ```
 
 最小检查命令：
@@ -56,6 +56,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 - 阶段 1 功能基线：`90257bb feat: expose channel inventory API`
 - 阶段 2 功能基线：`69dff03 feat: expose points redemption API`
 - 阶段 3 安全基线：`4c44564 test: prove phase three commerce safety`
+- 阶段 4 功能基线：`b955099 feat: operate fulfillment tasks`
 - 当前远程同步状态：本阶段未执行推送，使用恢复检查命令确认
 - tracked 工作区：阶段 2 交接提交后应为干净
 - Docker MySQL/Redis：最终验收时已启动并健康
@@ -63,7 +64,21 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 - Spring Boot：4.1.0
 - MySQL：8.4
 - Redis：配额、预占、Redisson 锁、Stream 消息
-- Flyway：V1–V13 全部通过校验
+- Flyway：V1–V15 全部通过校验
+
+阶段 4 最终验收证据：
+
+```text
+临时空库 V1->V15：13/13 契约通过，39 张业务表
+临时授权已撤销，临时数据库已删除
+阶段 4 聚焦测试：34/34 通过
+全量回归：371/371 通过
+Failures: 0
+Errors: 0
+打包：BUILD SUCCESS
+JAR：69,662,414 字节
+审查：Critical 0，Important 0
+```
 
 阶段 3 最终验收证据：
 
@@ -323,6 +338,33 @@ POST /api/admin/points/redemptions/{redemptionNo}/reverse
 
 阶段 3 边界：模拟支付只用于本地；没有购物车、退款、地址、物流和真实外部 Gateway；抽奖权益 handler 尚未迁移到这些领域服务。
 
+### 3.11 阶段 4：统一异步履约与模拟供应方
+
+已完成：
+
+- `fulfillment_task`、`fulfillment_attempt`、`fulfillment_quarantine` 持久账本；
+- `CouponGateway`、`PointsGateway`、`MembershipGateway`、`LogisticsGateway` 强类型接口；
+- 四套独立、幂等、并发安全的本地模拟供应方；
+- `SUCCESS/RETRYABLE/PERMANENT/UNKNOWN_BEFORE/UNKNOWN_AFTER_SUCCESS` 故障注入；
+- 短事务领取、随机租约、Gateway 事务外执行和租约校验回写；
+- 指数退避、最大次数、结果未知主动查询、过期租约安全恢复和 quarantine；
+- 创建、分页、详情、人工重试、终止、模拟规则共 6 个管理员接口；
+- 物流请求只接受脱敏合成信息，安全错误摘要不超过 500 字符；
+- 20 线程供应方幂等、20 Worker 领取竞争、10 线程任务创建等并发验证。
+
+完整文档：
+
+```text
+docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md
+docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md
+docs/fulfillment-gateway-api.md
+docs/progress/阶段4-任务1-履约数据库与领域骨架完成介绍.md
+...
+docs/progress/阶段4-任务8-阶段交付完成介绍.md
+```
+
+阶段 4 边界：四个适配器当前连接本地模拟供应方；没有迁移抽奖 `user_benefit`；没有真实收货地址、运单和物流轨迹。前者属于阶段 5，后者属于阶段 6。
+
 ## 4. 数据库迁移
 
 已有 V1–V4 保留原基础、奖品和活动模块。
@@ -363,7 +405,12 @@ POST /api/admin/points/redemptions/{redemptionNo}/reverse
 - `V12__add_membership_assets.sql`：会员产品、用户会员、不可变发放记录；
 - `V13__add_cash_order_and_payment.sql`：商城订单、模拟支付单和 9 项权限。
 
-不要修改已发布的 V1–V13；后续数据库变更新建 V14。
+阶段 4 新迁移：
+
+- `V14__add_fulfillment_engine.sql`：履约任务、尝试、隔离和 4 项权限；
+- `V15__add_fulfillment_simulators.sql`：四张模拟供应方记录表和失败规则表。
+
+不要修改已发布的 V1–V15；后续数据库变更新建 V16。
 
 ---
 
@@ -588,27 +635,28 @@ docs/activity-management-api.md
 
 ## 11. 下一阶段与抽奖可选任务
 
-### 当前唯一主线：规划阶段 4 统一异步履约底座
+### 当前唯一主线：设计阶段 5 抽奖奖励迁移
 
-阶段 2 已完成计划与接口：
+阶段 4 已完成设计、计划与接口：
 
 ```text
-docs/superpowers/plans/2026-08-08-points-account-redemption.md
-docs/points-redemption-api.md
+docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md
+docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md
+docs/fulfillment-gateway-api.md
 ```
 
-阶段 4 规划应覆盖：
+阶段 5 设计应覆盖：
 
-1. `fulfillment_task`、尝试记录、隔离记录和稳定履约号；
-2. `CouponGateway`、`PointsGateway`、`MembershipGateway`、`LogisticsGateway`；
-3. 四套幂等本地模拟供应方；
-4. 事务外调用、超时、重试、指数退避和结果未知分类；
-5. DLQ/quarantine、人工重试、主动查询与对账；
-6. 调用审计脱敏和毒消息隔离。
+1. `reward_definition` 与活动奖项的迁移/兼容策略；
+2. 抽奖成功事务如何与 `fulfillment_task` 可靠同库落账；
+3. `COUPON/POINTS/MEMBERSHIP/PHYSICAL` 到四类 payload 的确定映射；
+4. 稳定履约号如何由抽奖记录生成并保持幂等；
+5. 旧 `user_benefit` 查询展示与新履约状态的兼容期；
+6. Redis Stream 旧权益 handler 的退役顺序、回滚方案和端到端并发测试。
 
-先写详细实施计划并让用户确认，不提前迁移抽奖奖励，不实现阶段 6 地址物流闭环。
+先写阶段 5 设计并让用户确认，再写实施计划；不在阶段 5 实现阶段 6 的地址、包裹和物流轨迹。
 
-以下内容是抽奖核心的非阻断优化，不替代阶段 3 主线。
+以下内容是抽奖核心的非阻断优化，不替代阶段 5 主线。
 
 这些不是第一版阻断项，不需要同时完成。
 
@@ -626,7 +674,7 @@ docs/points-redemption-api.md
 
 ### 优先级 C：数据库防御约束
 
-如仍需要这些可选约束，应新建 V11 或之后的迁移，不修改 V5，可添加：
+如仍需要这些可选约束，应新建 V16 或之后的迁移，不修改 V5，可添加：
 
 - `result_type` 枚举 CHECK；
 - benefit status 枚举 CHECK；
@@ -664,12 +712,15 @@ docs/points-redemption-api.md
 1. `docs/LuckyHub-迷你商城下一阶段执行总路线.md`
 2. `docs/LuckyHub-开发进度交接总结.md`
 3. `git status --short` 与 `git log -5 --oneline`
-4. 阶段 3 规划时定向读取：
+4. 阶段 5 设计时定向读取：
    - 总体设计：`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`
    - 阶段 1 计划：`docs/superpowers/plans/2026-08-08-catalog-reward-channel-inventory.md`
    - 阶段 1 API：`docs/catalog-reward-inventory-api.md`
    - 阶段 2 计划：`docs/superpowers/plans/2026-08-08-points-account-redemption.md`
    - 阶段 2 API：`docs/points-redemption-api.md`
+   - 阶段 4 设计：`docs/superpowers/specs/2026-08-09-unified-fulfillment-gateways-design.md`
+   - 阶段 4 计划：`docs/superpowers/plans/2026-08-09-unified-fulfillment-gateways.md`
+   - 阶段 4 API：`docs/fulfillment-gateway-api.md`
 5. 如需维护旧抽奖，再读取：
    - 主流程：`docs/LuckyHub-抽奖核心流程实现详解.md`
    - API：`docs/lottery-api.md`

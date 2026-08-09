@@ -215,11 +215,11 @@ record CreateFulfillmentTaskCommand(
 **Interfaces:**
 - Produces a runnable V1-V15 project and sets Phase 5 as the next planning stage.
 
-- [ ] Add/repeat full concurrency and four-provider end-to-end scenarios; run the Phase 4 focused suite until GREEN.
-- [ ] Migrate an empty temporary schema V1->V15, revoke its grant and drop only that schema in `finally`.
-- [ ] Run full `test`, `package '-DskipTests'`, `git diff --check`, UTF-8/link/secret checks and JAR OpenAPI smoke.
-- [ ] Record exact test counts, artifact size, Critical/Important review and known boundaries in all handoff documents.
-- [ ] Verify every plan checkbox and every task explanation document, commit `docs: hand off phase four fulfillment`.
+- [x] Add/repeat full concurrency and four-provider end-to-end scenarios; run the Phase 4 focused suite until GREEN.
+- [x] Migrate an empty temporary schema V1->V15, revoke its grant and drop only that schema in `finally`.
+- [x] Run full `test`, `package '-DskipTests'`, `git diff --check`, UTF-8/link/secret checks and JAR OpenAPI smoke.
+- [x] Record exact test counts, artifact size, Critical/Important review and known boundaries in all handoff documents.
+- [x] Verify every plan checkbox and every task explanation document, commit `docs: hand off phase four fulfillment`.
 
 ## Completion Boundary
 
