@@ -80,9 +80,12 @@ public interface UserBenefitMapper extends BaseMapper<UserBenefit> {
     @Select("""
             SELECT id FROM user_benefit
             WHERE status='CLAIM_PENDING' AND claim_deadline IS NOT NULL AND claim_deadline<=#{now}
-            ORDER BY claim_deadline,id LIMIT #{limit}
+              AND id>#{afterId}
+            ORDER BY id LIMIT #{limit}
             """)
-    List<Long> selectDueClaimIds(@Param("now") LocalDateTime now, @Param("limit") int limit);
+    List<Long> selectDueClaimIdsAfter(@Param("now") LocalDateTime now,
+                                      @Param("afterId") long afterId,
+                                      @Param("limit") int limit);
 
     @Update("""
             UPDATE user_benefit SET status='CLAIM_EXPIRED',updated_at=CURRENT_TIMESTAMP(3)

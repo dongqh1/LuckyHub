@@ -62,12 +62,17 @@ public class PhysicalClaimServiceImpl implements PhysicalClaimService {
         if (benefit == null || !Objects.equals(benefit.getUserId(), userId)) {
             throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
         }
-        ProductRewardPayload product = validateFrozenProduct(benefit);
-        LotteryDrawRecord draw = requireDrawIdentity(benefit);
-
         ShippingOrder existing = shippingOrderMapper.lockBySource(
                 ShippingSourceType.LOTTERY_BENEFIT, Long.toString(benefitId));
-        if (existing != null) return existing(existing, command.addressId(), requestId, benefit, product);
+        if (existing != null) {
+            validateExistingLifecycle(benefit, existing);
+            ProductRewardPayload product = validateFrozenProduct(
+                    benefit, ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            requireDrawIdentity(benefit, ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            return existing(existing, command.addressId(), requestId, benefit, product);
+        }
+        ProductRewardPayload product = validateFrozenProduct(benefit, ShippingErrorCode.CLAIM_NOT_ALLOWED);
+        LotteryDrawRecord draw = requireDrawIdentity(benefit, ShippingErrorCode.CLAIM_NOT_ALLOWED);
         if (benefit.getStatus() != BenefitStatus.CLAIM_PENDING || benefit.getShippingOrderId() != null) {
             throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
         }
@@ -103,26 +108,39 @@ public class PhysicalClaimServiceImpl implements PhysicalClaimService {
         return shippingOrders.getForUser(benefit.getUserId(), order.getShippingNo());
     }
 
-    private ProductRewardPayload validateFrozenProduct(UserBenefit benefit) {
+    private void validateExistingLifecycle(UserBenefit benefit, ShippingOrder order) {
+        if (!Objects.equals(benefit.getShippingOrderId(), order.getId())) {
+            throw error(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+        }
+        BenefitStatus status = benefit.getStatus();
+        if (status != BenefitStatus.CLAIMED && status != BenefitStatus.FULFILLING
+                && status != BenefitStatus.SHIPPED && status != BenefitStatus.DELIVERED
+                && status != BenefitStatus.FULFILLMENT_FAILED
+                && status != BenefitStatus.FULFILLMENT_TERMINATED) {
+            throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
+        }
+    }
+
+    private ProductRewardPayload validateFrozenProduct(UserBenefit benefit, ShippingErrorCode invalidCode) {
         if (benefit.getPrizeType() != PrizeType.PHYSICAL || benefit.getRewardType() != RewardType.PRODUCT
                 || benefit.getRewardTargetId() == null || benefit.getRewardQuantity() == null
                 || benefit.getRewardPayload() == null) {
-            throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
+            throw error(invalidCode);
         }
         try {
             ProductRewardPayload product = json.readValue(benefit.getRewardPayload(), ProductRewardPayload.class);
             if (!Objects.equals(benefit.getRewardTargetId(), product.skuId())
                     || benefit.getRewardQuantity() != product.quantity()
                     || !Objects.equals(benefit.getQuantity(), product.quantity())) {
-                throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
+                throw error(invalidCode);
             }
             return product;
         } catch (JacksonException | IllegalArgumentException exception) {
-            throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
+            throw error(invalidCode);
         }
     }
 
-    private LotteryDrawRecord requireDrawIdentity(UserBenefit benefit) {
+    private LotteryDrawRecord requireDrawIdentity(UserBenefit benefit, ShippingErrorCode invalidCode) {
         LotteryDrawRecord draw = drawRecords.selectById(benefit.getDrawRecordId());
         if (draw == null || !Objects.equals(draw.getUserId(), benefit.getUserId())
                 || !Objects.equals(draw.getPrizeId(), benefit.getPrizeId())
@@ -133,7 +151,7 @@ public class PhysicalClaimServiceImpl implements PhysicalClaimService {
                 || !Objects.equals(draw.getRewardQuantity(), benefit.getRewardQuantity())
                 || !Objects.equals(draw.getRewardPayload(), benefit.getRewardPayload())
                 || !Objects.equals(draw.getRewardFingerprint(), benefit.getRewardFingerprint())) {
-            throw error(ShippingErrorCode.CLAIM_NOT_ALLOWED);
+            throw error(invalidCode);
         }
         return draw;
     }

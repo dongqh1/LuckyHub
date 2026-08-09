@@ -10,6 +10,7 @@ import com.dongqh.luckyhub.prize.enums.PrizeType;
 import com.dongqh.luckyhub.reward.enums.RewardType;
 import com.dongqh.luckyhub.shipping.dto.ClaimPhysicalBenefitCommand;
 import com.dongqh.luckyhub.shipping.entity.ShippingAddressSnapshot;
+import com.dongqh.luckyhub.shipping.entity.ShippingOrder;
 import com.dongqh.luckyhub.shipping.enums.ShippingErrorCode;
 import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
 import com.dongqh.luckyhub.shipping.enums.ShippingStatus;
@@ -97,6 +98,74 @@ class PhysicalBenefitClaimTests {
                 .isInstanceOfSatisfying(BusinessException.class, error ->
                         assertThat(error.getErrorCode()).isEqualTo(ShippingErrorCode.SHIPPING_REQUEST_INVALID));
         verifyNoInteractions(benefits);
+    }
+
+    @Test
+    void exactRetryReturnsExistingOrderEvenAfterClaimDeadline() {
+        benefit.setStatus(BenefitStatus.FULFILLING);
+        benefit.setShippingOrderId(61L);
+        benefit.setClaimDeadline(LocalDateTime.now().minusDays(1));
+        ShippingOrder existing = existingOrder(requestId, 51L);
+        ShippingOrderView expected = view();
+        when(orderMapper.lockBySource(ShippingSourceType.LOTTERY_BENEFIT, "31")).thenReturn(existing);
+        when(orders.getForUser(11, "SHIPPING-61")).thenReturn(expected);
+
+        assertThat(service.claim(11, 31, new ClaimPhysicalBenefitCommand(requestId, 51L)))
+                .isEqualTo(expected);
+        verify(snapshots).require(41L);
+        verify(snapshots, never()).create(anyLong(), anyLong(), any(), anyString());
+        verify(orders, never()).create(any());
+    }
+
+    @Test
+    void existingOrderMustBeLinkedFromBenefitAndInClaimedLifecycle() {
+        ShippingOrder existing = existingOrder(requestId, 51L);
+        when(orderMapper.lockBySource(ShippingSourceType.LOTTERY_BENEFIT, "31")).thenReturn(existing);
+        benefit.setStatus(BenefitStatus.FULFILLING);
+        benefit.setShippingOrderId(999L);
+
+        assertIdempotencyConflict(() -> service.claim(11, 31,
+                new ClaimPhysicalBenefitCommand(requestId, 51L)));
+
+        benefit.setShippingOrderId(61L);
+        benefit.setStatus(BenefitStatus.CLAIM_EXPIRED);
+        assertThatThrownBy(() -> service.claim(11, 31,
+                new ClaimPhysicalBenefitCommand(requestId, 51L)))
+                .isInstanceOfSatisfying(BusinessException.class, error ->
+                        assertThat(error.getErrorCode()).isEqualTo(ShippingErrorCode.CLAIM_NOT_ALLOWED));
+    }
+
+    @Test
+    void existingOrderRejectsChangedAddressRequestOrFrozenIdentity() {
+        benefit.setStatus(BenefitStatus.SHIPPED);
+        benefit.setShippingOrderId(61L);
+        ShippingOrder existing = existingOrder(requestId, 51L);
+        when(orderMapper.lockBySource(ShippingSourceType.LOTTERY_BENEFIT, "31"))
+                .thenReturn(existing);
+
+        assertIdempotencyConflict(() -> service.claim(11, 31,
+                new ClaimPhysicalBenefitCommand(requestId, 52L)));
+        assertIdempotencyConflict(() -> service.claim(11, 31,
+                new ClaimPhysicalBenefitCommand(UUID.randomUUID().toString(), 51L)));
+        benefit.setRewardPayload("{\"skuId\":91,\"skuCode\":\"CHANGED\",\"productName\":\"礼盒\",\"skuName\":\"默认\",\"quantity\":2}");
+        assertIdempotencyConflict(() -> service.claim(11, 31,
+                new ClaimPhysicalBenefitCommand(requestId, 51L)));
+    }
+
+    private void assertIdempotencyConflict(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class, error ->
+                assertThat(error.getErrorCode()).isEqualTo(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT));
+    }
+
+    private ShippingOrder existingOrder(String claimRequestId, long addressId) {
+        ShippingAddressSnapshot snapshot = new ShippingAddressSnapshot();
+        snapshot.setId(41L); snapshot.setAddressId(addressId);
+        when(snapshots.require(41L)).thenReturn(snapshot);
+        ShippingOrder order = new ShippingOrder();
+        order.setId(61L); order.setShippingNo("SHIPPING-61"); order.setTargetUserId(11L);
+        order.setAddressSnapshotId(41L); order.setClaimRequestId(claimRequestId);
+        order.setSkuCode("SKU-1"); order.setProductName("礼盒"); order.setQuantity(2);
+        return order;
     }
 
     private UserBenefit benefit(LocalDateTime deadline) {

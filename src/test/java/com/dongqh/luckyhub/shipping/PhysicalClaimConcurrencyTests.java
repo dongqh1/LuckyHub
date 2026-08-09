@@ -4,11 +4,13 @@ import com.dongqh.luckyhub.shipping.dto.ClaimPhysicalBenefitCommand;
 import com.dongqh.luckyhub.shipping.service.PhysicalClaimService;
 import com.dongqh.luckyhub.shipping.service.PhysicalClaimExpiryService;
 import com.dongqh.luckyhub.shipping.vo.ShippingOrderView;
+import com.dongqh.luckyhub.benefit.mapper.UserBenefitMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,11 +24,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.reset;
 
 @SpringBootTest
 class PhysicalClaimConcurrencyTests extends Task5ShippingTestFixture {
     @Autowired PhysicalClaimService claims;
     @Autowired PhysicalClaimExpiryService expiry;
+    @MockitoSpyBean UserBenefitMapper benefitMapperSpy;
     private Long benefitId;
     private Long drawRecordId;
     private Long drawOrderId;
@@ -118,6 +126,56 @@ class PhysicalClaimConcurrencyTests extends Task5ShippingTestFixture {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void claimFailureRollsBackSnapshotOrderTaskAndBenefitLink() {
+        long userId = createUser();
+        long addressId = createAddress(userId);
+        long skuId = createPhysicalSku(true, false);
+        createPendingBenefit(userId, skuId, LocalDateTime.now().plusDays(1));
+        doReturn(0).when(benefitMapperSpy).markClaimed(eq(benefitId), any(Long.class), any(LocalDateTime.class));
+        try {
+            assertThatThrownBy(() -> claims.claim(userId, benefitId,
+                    new ClaimPhysicalBenefitCommand(UUID.randomUUID().toString(), addressId)))
+                    .isInstanceOf(RuntimeException.class);
+        } finally {
+            reset(benefitMapperSpy);
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM user_benefit WHERE id=?", String.class, benefitId))
+                .isEqualTo("CLAIM_PENDING");
+        assertThat(jdbc.queryForObject("SELECT shipping_order_id FROM user_benefit WHERE id=?",
+                Long.class, benefitId)).isNull();
+        assertThat(jdbc.queryForObject("SELECT claimed_at FROM user_benefit WHERE id=?",
+                LocalDateTime.class, benefitId)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot WHERE source_type='LOTTERY_BENEFIT' AND source_id=?",
+                Integer.class, benefitId.toString())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE source_type='LOTTERY_BENEFIT' AND source_id=?",
+                Integer.class, benefitId.toString())).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fulfillment_task WHERE source_type='LOTTERY_BENEFIT' AND source_id=?",
+                Integer.class, benefitId.toString())).isZero();
+    }
+
+    @Test
+    void poisonExpiryRollsBackLedgerStockAndBenefitState() {
+        long userId = createUser();
+        long skuId = createPhysicalSku(true, false);
+        LocalDateTime now = LocalDateTime.now();
+        createPendingBenefit(userId, skuId, now.minusSeconds(1));
+        int stockBefore = jdbc.queryForObject("SELECT remaining_stock FROM marketing_activity_prize WHERE id=?",
+                Integer.class, activityPrizeId);
+        doReturn(0).when(benefitMapperSpy).markClaimExpired(eq(benefitId), eq(now));
+        try {
+            assertThat(expiry.expireDue(1, now)).isZero();
+        } finally {
+            reset(benefitMapperSpy);
+        }
+        assertThat(jdbc.queryForObject("SELECT status FROM user_benefit WHERE id=?", String.class, benefitId))
+                .isEqualTo("CLAIM_PENDING");
+        assertThat(jdbc.queryForObject("SELECT remaining_stock FROM marketing_activity_prize WHERE id=?",
+                Integer.class, activityPrizeId)).isEqualTo(stockBefore);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM inventory_ledger WHERE business_no=?",
+                Integer.class, "CLAIM-EXPIRE-" + benefitId)).isZero();
     }
 
     private void createPendingBenefit(long userId, long skuId, LocalDateTime deadline) {

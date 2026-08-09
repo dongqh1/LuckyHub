@@ -11,7 +11,11 @@ import com.dongqh.luckyhub.lottery.mapper.LotteryDrawRecordMapper;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
 import com.dongqh.luckyhub.reward.enums.RewardType;
 import com.dongqh.luckyhub.shipping.service.impl.PhysicalClaimExpiryServiceImpl;
+import com.dongqh.luckyhub.shipping.service.PhysicalClaimExpiryWorker;
+import com.dongqh.luckyhub.shipping.service.impl.PhysicalClaimExpiryWorkerImpl;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
@@ -19,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,9 +34,8 @@ class PhysicalClaimExpiryTests {
     LotteryDrawRecordMapper draws = mock(LotteryDrawRecordMapper.class);
     MarketingActivityPrizeMapper activityPrizes = mock(MarketingActivityPrizeMapper.class);
     ActivityPrizeInventoryService inventory = mock(ActivityPrizeInventoryService.class);
-    PhysicalClaimExpiryServiceImpl service = new PhysicalClaimExpiryServiceImpl(
-            benefits, draws, activityPrizes, inventory,
-            JsonMapper.builder().findAndAddModules().build());
+    PhysicalClaimExpiryWorker worker = mock(PhysicalClaimExpiryWorker.class);
+    PhysicalClaimExpiryServiceImpl service = new PhysicalClaimExpiryServiceImpl(benefits, worker);
 
     @Test
     void expiredBenefitReturnsResolvedActivityPrizeInventoryExactlyOnce() {
@@ -40,13 +44,15 @@ class PhysicalClaimExpiryTests {
         LotteryDrawRecord draw = draw(benefit);
         MarketingActivityPrize relation = new MarketingActivityPrize();
         relation.setId(301L);
-        when(benefits.selectDueClaimIds(now, 10)).thenReturn(List.of(31L));
+        PhysicalClaimExpiryWorkerImpl transactionWorker = new PhysicalClaimExpiryWorkerImpl(
+                benefits, draws, activityPrizes, inventory,
+                JsonMapper.builder().findAndAddModules().build());
         when(benefits.selectByIdForUpdate(31)).thenReturn(benefit);
         when(draws.selectById(21L)).thenReturn(draw);
         when(activityPrizes.lockByActivityAndPrize(101, 71)).thenReturn(relation);
         when(benefits.markClaimExpired(31, now)).thenReturn(1);
 
-        assertThat(service.expireDue(10, now)).isOne();
+        assertThat(transactionWorker.expireOne(31, now)).isTrue();
         verify(inventory).returnExpiredClaim(301, 91, "CLAIM-EXPIRE-31");
         verify(benefits).markClaimExpired(31, now);
     }
@@ -56,15 +62,54 @@ class PhysicalClaimExpiryTests {
         LocalDateTime now = LocalDateTime.now();
         UserBenefit benefit = benefit(now.minusSeconds(1));
         MarketingActivityPrize relation = new MarketingActivityPrize(); relation.setId(301L);
-        when(benefits.selectDueClaimIds(now, 10)).thenReturn(List.of(31L));
+        PhysicalClaimExpiryWorkerImpl transactionWorker = new PhysicalClaimExpiryWorkerImpl(
+                benefits, draws, activityPrizes, inventory,
+                JsonMapper.builder().findAndAddModules().build());
         when(benefits.selectByIdForUpdate(31)).thenReturn(benefit);
         when(draws.selectById(21L)).thenReturn(draw(benefit));
         when(activityPrizes.lockByActivityAndPrize(101, 71)).thenReturn(relation);
         doThrow(new IllegalStateException("stock failure")).when(inventory)
                 .returnExpiredClaim(301, 91, "CLAIM-EXPIRE-31");
 
-        assertThatThrownBy(() -> service.expireDue(10, now)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> transactionWorker.expireOne(31, now)).isInstanceOf(IllegalStateException.class);
         verify(benefits, never()).markClaimExpired(anyLong(), any());
+    }
+
+    @Test
+    void poisonCandidateDoesNotStopOrStarveLaterDueBenefit() {
+        LocalDateTime now = LocalDateTime.now();
+        when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(List.of(31L, 32L));
+        doThrow(new IllegalStateException("poison")).when(worker).expireOne(31L, now);
+        when(worker.expireOne(32L, now)).thenReturn(true);
+
+        assertThat(service.expireDue(1, now)).isOne();
+        verify(worker).expireOne(31L, now);
+        verify(worker).expireOne(32L, now);
+    }
+
+    @Test
+    void eachCandidateWorkerRequiresANewTransaction() throws Exception {
+        Transactional transaction = PhysicalClaimExpiryWorkerImpl.class
+                .getMethod("expireOne", long.class, LocalDateTime.class)
+                .getAnnotation(Transactional.class);
+        assertThat(transaction).isNotNull();
+        assertThat(transaction.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+    }
+
+    @Test
+    void aFullPageOfPoisonCandidatesCannotStarveTheNextPage() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Long> poisonIds = LongStream.rangeClosed(1, 50).boxed().toList();
+        when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(poisonIds);
+        when(benefits.selectDueClaimIdsAfter(now, 50L, 50)).thenReturn(List.of(51L));
+        when(worker.expireOne(anyLong(), eq(now))).thenAnswer(invocation -> {
+            long id = invocation.getArgument(0);
+            if (id <= 50) throw new IllegalStateException("poison");
+            return true;
+        });
+
+        assertThat(service.expireDue(1, now)).isOne();
+        verify(worker).expireOne(51L, now);
     }
 
     @Test

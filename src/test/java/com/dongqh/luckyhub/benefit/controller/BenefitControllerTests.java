@@ -4,6 +4,8 @@ import com.dongqh.luckyhub.benefit.dto.BenefitQuery;
 import com.dongqh.luckyhub.benefit.enums.BenefitStatus;
 import com.dongqh.luckyhub.benefit.service.BenefitQueryService;
 import com.dongqh.luckyhub.benefit.vo.BenefitView;
+import com.dongqh.luckyhub.shipping.dto.ClaimPhysicalBenefitCommand;
+import com.dongqh.luckyhub.shipping.service.PhysicalClaimService;
 import com.dongqh.luckyhub.auth.context.LoginContext;
 import com.dongqh.luckyhub.auth.model.LoginPrincipal;
 import com.dongqh.luckyhub.common.result.PageResponse;
@@ -29,8 +31,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -38,14 +42,16 @@ class BenefitControllerTests {
     private BenefitQueryService service;
     private MockMvc mockMvc;
     private UserPermissionService permissionService;
+    private PhysicalClaimService claims;
 
     @BeforeEach
     void setUp() {
         service = mock(BenefitQueryService.class);
         permissionService = mock(UserPermissionService.class);
+        claims = mock(PhysicalClaimService.class);
         LoginContext.set(new LoginPrincipal(77L, "tester", "session"));
         when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of(PermissionCodes.BENEFIT_READ));
-        mockMvc = MockMvcBuilders.standaloneSetup(new BenefitController(service))
+        mockMvc = MockMvcBuilders.standaloneSetup(new BenefitController(service, claims))
                 .addInterceptors(new PermissionInterceptor(permissionService))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();
     }
@@ -94,6 +100,24 @@ class BenefitControllerTests {
         LoginContext.set(new LoginPrincipal(77L, "tester", "session"));
         when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of());
         mockMvc.perform(get("/api/benefits")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void claimRequiresAuthenticationAndBenefitReadPermission() throws Exception {
+        String body = "{\"requestId\":\"91da2b6d-30b6-46af-bbcb-1188bcdf0f66\",\"addressId\":51}";
+        LoginContext.clear();
+        mockMvc.perform(post("/api/benefits/31/claim").contentType("application/json").content(body))
+                .andExpect(status().isUnauthorized());
+        LoginContext.set(new LoginPrincipal(77L, "tester", "session"));
+        when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of());
+        mockMvc.perform(post("/api/benefits/31/claim").contentType("application/json").content(body))
+                .andExpect(status().isForbidden());
+        when(permissionService.findPermissionCodes(77L)).thenReturn(java.util.Set.of(PermissionCodes.BENEFIT_READ));
+        mockMvc.perform(post("/api/benefits/31/claim").contentType("application/json").content(body))
+                .andExpect(status().isOk());
+        verify(claims).claim(77L, 31L,
+                new ClaimPhysicalBenefitCommand("91da2b6d-30b6-46af-bbcb-1188bcdf0f66", 51L));
+        assertPermission("claim", long.class, ClaimPhysicalBenefitCommand.class);
     }
 
     private void assertPermission(String name, Class<?>... types) throws Exception {
