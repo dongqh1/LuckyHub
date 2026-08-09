@@ -22,6 +22,7 @@ import com.dongqh.luckyhub.lottery.model.DrawExecutionContext;
 import com.dongqh.luckyhub.lottery.model.DrawExecutionResult;
 import com.dongqh.luckyhub.lottery.model.DrawPrizeSnapshot;
 import com.dongqh.luckyhub.lottery.model.DrawResultItem;
+import com.dongqh.luckyhub.reward.model.RewardSnapshot;
 import com.dongqh.luckyhub.lottery.service.DrawTransactionService;
 import com.dongqh.luckyhub.lottery.service.OutboxService;
 import org.springframework.stereotype.Service;
@@ -119,13 +120,15 @@ public class DrawTransactionServiceImpl implements DrawTransactionService {
             record.setPrizeName(prize.prizeName());
             record.setPrizeType(prize.prizeType());
             record.setPrizeImageUrl(prize.prizeImageUrl());
+            copyReward(prize.rewardSnapshot(), record);
         }
         recordMapper.insert(record);
 
         Long benefitId = prize == null ? null : persistPendingBenefit(context, record, prize);
         return new DrawResultItem(
                 record.getId(), sequence, record.getResultType(), record.getPrizeId(),
-                record.getPrizeName(), record.getPrizeType(), record.getPrizeImageUrl(), benefitId);
+                record.getPrizeName(), record.getPrizeType(), record.getPrizeImageUrl(), benefitId,
+                prize == null ? null : prize.rewardSnapshot());
     }
 
     private Long persistPendingBenefit(
@@ -137,11 +140,32 @@ public class DrawTransactionServiceImpl implements DrawTransactionService {
         benefit.setUserId(context.userId());
         benefit.setPrizeId(prize.prizeId());
         benefit.setPrizeType(prize.prizeType());
+        copyReward(prize.rewardSnapshot(), benefit);
         benefit.setQuantity(1);
         benefit.setStatus(BenefitStatus.PENDING);
         benefit.setObtainedAt(context.drawTime());
         benefitMapper.insert(benefit);
         return benefit.getId();
+    }
+
+    private void copyReward(RewardSnapshot reward, LotteryDrawRecord record) {
+        if (reward == null) return;
+        record.setRewardDefinitionId(reward.rewardDefinitionId());
+        record.setRewardType(reward.rewardType());
+        record.setRewardTargetId(reward.targetId());
+        record.setRewardQuantity(reward.quantity());
+        record.setRewardPayload(reward.payloadJson());
+        record.setRewardFingerprint(reward.fingerprint());
+    }
+
+    private void copyReward(RewardSnapshot reward, UserBenefit benefit) {
+        if (reward == null) return;
+        benefit.setRewardDefinitionId(reward.rewardDefinitionId());
+        benefit.setRewardType(reward.rewardType());
+        benefit.setRewardTargetId(reward.targetId());
+        benefit.setRewardQuantity(reward.quantity());
+        benefit.setRewardPayload(reward.payloadJson());
+        benefit.setRewardFingerprint(reward.fingerprint());
     }
 
     private void appendConfirmedEvent(DrawExecutionContext context) {
@@ -157,7 +181,10 @@ public class DrawTransactionServiceImpl implements DrawTransactionService {
                 DrawEventType.PRIZE_FULFILLMENT_REQUESTED,
                 context.requestId(), context.userId(), context.activityId(), context.orderId(),
                 context.drawTime(), new PrizeFulfillmentRequestedEvent(
-                        item.benefitId(), item.recordId(), item.prizeId(), item.prizeType()),
+                        item.benefitId(), item.recordId(), item.prizeId(), item.prizeType(),
+                        item.rewardSnapshot() == null ? null : item.rewardSnapshot().rewardDefinitionId(),
+                        item.rewardSnapshot() == null ? null : item.rewardSnapshot().rewardType(),
+                        item.rewardSnapshot() == null ? null : item.rewardSnapshot().fingerprint()),
                 objectMapper));
     }
 }

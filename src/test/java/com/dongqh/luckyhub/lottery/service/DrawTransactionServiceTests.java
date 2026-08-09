@@ -14,6 +14,8 @@ import com.dongqh.luckyhub.lottery.model.DrawExecutionResult;
 import com.dongqh.luckyhub.lottery.model.DrawPrizeSnapshot;
 import com.dongqh.luckyhub.lottery.model.NewDrawOrder;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
+import com.dongqh.luckyhub.reward.enums.RewardType;
+import com.dongqh.luckyhub.reward.model.RewardSnapshot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -84,8 +86,35 @@ class DrawTransactionServiceTests {
         assertThat(orderStatus(fixture.orderId())).isEqualTo(DrawOrderStatus.SUCCESS.name());
         assertThat(benefitCount(fixture.requestId())).isOne();
         assertThat(benefitStatus(fixture.requestId())).isEqualTo("PENDING");
+        assertThat(rewardColumns(fixture.requestId())).allMatch(value -> value == null);
+        assertThat(fulfillmentRewardIdentity(fixture.requestId()))
+                .allMatch(value -> value == null || value.equals("null"));
         assertThat(eventTypes(fixture.requestId())).containsExactlyInAnyOrder(
                 DrawEventType.DRAW_CONFIRMED.name(), DrawEventType.PRIZE_FULFILLMENT_REQUESTED.name());
+    }
+
+    @Test
+    void boundWinPersistsByteEqualRewardSnapshotAndEmitsItsIdentity() {
+        RewardSnapshot reward = new RewardSnapshot(701L, "WELCOME-2", RewardType.COUPON,
+                702L, 2L, "{\"templateId\":702,\"templateCode\":\"WELCOME\",\"quantity\":2}",
+                "b".repeat(64));
+        Fixture fixture = fixture(1, 2, reward);
+        when(drawEngine.select(anyList(), anyInt()))
+                .thenReturn(DrawCandidate.prize(fixture.activityPrizeId(), fixture.prizeId()));
+
+        DrawExecutionResult result = transactionService.execute(fixture.context());
+
+        assertThat(result.items()).singleElement().satisfies(item -> assertThat(item.rewardSnapshot()).isEqualTo(reward));
+        List<Object> stored = rewardColumns(fixture.requestId());
+        assertThat(stored.get(0).toString()).isEqualTo("701");
+        assertThat(stored.get(1)).isEqualTo("COUPON");
+        assertThat(stored.get(2).toString()).isEqualTo("702");
+        assertThat(stored.get(3).toString()).isEqualTo("2");
+        assertThat(stored.get(4)).isEqualTo(stored.get(10));
+        assertThat(stored.get(5)).isEqualTo(reward.fingerprint()).isEqualTo(stored.get(11));
+        assertThat(fulfillmentRewardIdentity(fixture.requestId()))
+                .containsExactly("701", "COUPON", reward.fingerprint());
+        assertThat(byteEqualRewardCopies(fixture.requestId())).isOne();
     }
 
     @Test
@@ -162,6 +191,10 @@ class DrawTransactionServiceTests {
     }
 
     private Fixture fixture(int drawCount, int stock) {
+        return fixture(drawCount, stock, null);
+    }
+
+    private Fixture fixture(int drawCount, int stock, RewardSnapshot reward) {
         String requestId = "task9-tx-" + UUID.randomUUID();
         requestIds.add(requestId);
         long unique = positiveRandomLong();
@@ -182,12 +215,55 @@ class DrawTransactionServiceTests {
                 requestId, 9001L, activityId, drawCount, LocalDate.of(2026, 7, 31)));
         DrawPrizeSnapshot snapshot = new DrawPrizeSnapshot(
                 relation.getId(), prizeId, "Task 9 Prize", PrizeType.COUPON,
-                "https://img/prize.png", 100, stock, true);
+                "https://img/prize.png", 100, stock, true, reward);
         DrawExecutionContext context = new DrawExecutionContext(
                 order.getId(), requestId, 9001L, activityId, drawCount,
                 LocalDate.of(2026, 7, 31), 0, List.of(snapshot),
                 LocalDateTime.of(2026, 7, 31, 22, 0));
         return new Fixture(order.getId(), requestId, prizeId, relation.getId(), context);
+    }
+
+    private List<Object> rewardColumns(String requestId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT r.reward_definition_id,r.reward_type,r.reward_target_id,
+                    r.reward_quantity,CAST(r.reward_payload AS CHAR),r.reward_fingerprint,
+                    b.reward_definition_id,b.reward_type,b.reward_target_id,
+                    b.reward_quantity,CAST(b.reward_payload AS CHAR),b.reward_fingerprint
+                FROM lottery_draw_record r JOIN user_benefit b ON b.draw_record_id=r.id
+                WHERE r.request_id=?
+                """, (rs, row) -> java.util.Arrays.asList(
+                rs.getObject(1), rs.getString(2), rs.getObject(3), rs.getObject(4),
+                rs.getString(5), rs.getString(6), rs.getObject(7), rs.getString(8),
+                rs.getObject(9), rs.getObject(10), rs.getString(11), rs.getString(12)), requestId);
+    }
+
+    private List<String> fulfillmentRewardIdentity(String requestId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT JSON_ARRAY(payload ->> '$.payload.rewardDefinitionId',
+                    payload ->> '$.payload.rewardType', payload ->> '$.payload.rewardFingerprint')
+                FROM message_outbox
+                WHERE event_type='PRIZE_FULFILLMENT_REQUESTED' AND payload ->> '$.requestId'=?
+                """, (rs, row) -> {
+            try {
+                return new tools.jackson.databind.ObjectMapper().readValue(rs.getString(1), List.class);
+            } catch (tools.jackson.core.JacksonException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }, requestId);
+    }
+
+    private int byteEqualRewardCopies(String requestId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM lottery_draw_record r
+                JOIN user_benefit b ON b.draw_record_id=r.id
+                WHERE r.request_id=?
+                  AND r.reward_definition_id <=> b.reward_definition_id
+                  AND r.reward_type <=> b.reward_type
+                  AND r.reward_target_id <=> b.reward_target_id
+                  AND r.reward_quantity <=> b.reward_quantity
+                  AND r.reward_payload <=> b.reward_payload
+                  AND r.reward_fingerprint <=> b.reward_fingerprint
+                """, Integer.class, requestId);
     }
 
     private List<StoredRecord> records(String requestId) {

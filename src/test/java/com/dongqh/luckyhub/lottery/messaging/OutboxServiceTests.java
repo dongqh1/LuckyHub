@@ -11,6 +11,7 @@ import com.dongqh.luckyhub.lottery.messaging.event.PrizeFulfillmentRequestedEven
 import com.dongqh.luckyhub.lottery.messaging.port.DrawEventPublisher;
 import com.dongqh.luckyhub.lottery.service.OutboxServiceImpl;
 import com.dongqh.luckyhub.prize.enums.PrizeType;
+import com.dongqh.luckyhub.reward.enums.RewardType;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.annotation.Propagation;
@@ -30,6 +31,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -89,6 +91,20 @@ class OutboxServiceTests {
                 DrawEventType.PRIZE_FULFILLMENT_REQUESTED,
                 fulfillment,
                 PrizeFulfillmentRequestedEvent.class);
+    }
+
+    @Test
+    void fulfillmentEventSupportsCompleteRewardIdentityAndRejectsPartialIdentity() throws Exception {
+        PrizeFulfillmentRequestedEvent event = new PrizeFulfillmentRequestedEvent(
+                51L, 52L, 53L, PrizeType.COUPON,
+                61L, RewardType.COUPON, "c".repeat(64));
+
+        String serialized = objectMapper.writeValueAsString(event);
+        assertThat(objectMapper.readValue(serialized, PrizeFulfillmentRequestedEvent.class)).isEqualTo(event);
+        assertThat(serialized).contains("\"rewardDefinitionId\":61", "\"rewardType\":\"COUPON\"");
+        assertThatThrownBy(() -> new PrizeFulfillmentRequestedEvent(
+                51L, 52L, 53L, PrizeType.COUPON, 61L, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

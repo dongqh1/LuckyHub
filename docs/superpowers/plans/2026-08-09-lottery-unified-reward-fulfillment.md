@@ -191,15 +191,15 @@ Explain why a coupon reward stores both template ID and template code and show a
 - New-path `PrizeFulfillmentRequestedEvent` adds nullable `rewardDefinitionId`, `rewardType`, and `rewardFingerprint`; its legacy four-argument constructor remains usable.
 - Draw record and benefit receive byte-for-byte equal snapshot values in the same transaction.
 
-- [ ] **Step 1: Write failing transaction and serialization tests**
+- [x] **Step 1: Write failing transaction and serialization tests**
 
 Prove a bound win stores equal definition/type/target/quantity/payload/fingerprint in record and benefit, emits the same ID/type/fingerprint, and a legacy win keeps all new fields null and produces a legacy-deserializable payload. Roll back the whole draw if the snapshot is partially populated.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=DrawRewardSnapshotTransactionTests,DrawTransactionServiceTests,OutboxServiceTests' test`. Expected: assertions fail because snapshot values are not persisted or emitted.
 
-- [ ] **Step 3: Implement snapshot propagation**
+- [x] **Step 3: Implement snapshot propagation**
 
 Extend `DrawPrizeSnapshot`/`DrawResultItem` only with immutable nullable reward data. In `persistResult`, copy the same snapshot into both entities; in `appendFulfillmentEvent`, emit:
 
@@ -213,11 +213,11 @@ new PrizeFulfillmentRequestedEvent(
 
 The compact constructor accepts either all three new fields or none; mixed presence is rejected.
 
-- [ ] **Step 4: Run GREEN and old lottery regressions**
+- [x] **Step 4: Run GREEN and old lottery regressions**
 
 Run focused tests plus `'-Dtest=LotteryServiceTests,LotteryPersistenceContractTests,LotteryControllerTests' test`.
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 Show why changing a reward definition after the win does not alter the stored reward. Commit `feat: persist lottery reward snapshots`.
 
