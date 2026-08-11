@@ -1,5 +1,9 @@
 package com.dongqh.luckyhub.shipping;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.dongqh.luckyhub.activity.entity.MarketingActivityPrize;
 import com.dongqh.luckyhub.activity.mapper.MarketingActivityPrizeMapper;
 import com.dongqh.luckyhub.benefit.entity.UserBenefit;
@@ -18,6 +22,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -97,7 +102,7 @@ class PhysicalClaimExpiryTests {
     }
 
     @Test
-    void aFullPageOfPoisonCandidatesCannotStarveTheNextPage() {
+    void aFullPageOfPoisonCandidatesConsumesThisRoundBudgetAndNextRoundContinues() {
         LocalDateTime now = LocalDateTime.now();
         List<Long> poisonIds = LongStream.rangeClosed(1, 50).boxed().toList();
         when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(poisonIds);
@@ -108,8 +113,67 @@ class PhysicalClaimExpiryTests {
             return true;
         });
 
+        assertThat(service.expireDue(1, now)).isZero();
+        verify(worker, times(50)).expireOne(anyLong(), eq(now));
+
         assertThat(service.expireDue(1, now)).isOne();
         verify(worker).expireOne(51L, now);
+    }
+
+    @Test
+    void eachInvocationHasAnExplicitCandidateWorkerBudget() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Long> poisonIds = LongStream.rangeClosed(1, 50).boxed().toList();
+        when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(poisonIds);
+        when(worker.expireOne(anyLong(), eq(now))).thenThrow(new IllegalStateException("private poison detail"));
+
+        assertThat(service.expireDue(1, now)).isZero();
+
+        verify(worker, times(50)).expireOne(anyLong(), eq(now));
+        verify(benefits, never()).selectDueClaimIdsAfter(now, 50L, 50);
+    }
+
+    @Test
+    void reachingTailRewindsOnlyForTheNextInvocation() {
+        LocalDateTime now = LocalDateTime.now();
+        when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(List.of(91L));
+        when(worker.expireOne(91L, now)).thenReturn(false, true);
+
+        assertThat(service.expireDue(1, now)).isZero();
+        assertThat(service.expireDue(1, now)).isOne();
+
+        verify(benefits, times(2)).selectDueClaimIdsAfter(now, 0L, 50);
+        verifyNoMoreInteractions(benefits);
+    }
+
+    @Test
+    void cursorMutationIsSerializedForConcurrentSchedulerCalls() throws Exception {
+        assertThat(Modifier.isSynchronized(PhysicalClaimExpiryServiceImpl.class
+                .getMethod("expireDue", int.class, LocalDateTime.class).getModifiers())).isTrue();
+    }
+
+    @Test
+    void poisonWarningContainsOnlyBoundedTypeAndCodeWithoutMessageOrThrowable() {
+        LocalDateTime now = LocalDateTime.now();
+        when(benefits.selectDueClaimIdsAfter(now, 0L, 50)).thenReturn(List.of(31L));
+        when(worker.expireOne(31L, now)).thenThrow(new IllegalStateException("secret-address-detail"));
+        Logger logger = (Logger) org.slf4j.LoggerFactory.getLogger(PhysicalClaimExpiryServiceImpl.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            service.expireDue(1, now);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.WARN);
+            assertThat(event.getFormattedMessage())
+                    .contains("benefitId=31", "errorType=IllegalStateException", "errorCode=-")
+                    .doesNotContain("secret-address-detail");
+            assertThat(event.getThrowableProxy()).isNull();
+        });
     }
 
     @Test
