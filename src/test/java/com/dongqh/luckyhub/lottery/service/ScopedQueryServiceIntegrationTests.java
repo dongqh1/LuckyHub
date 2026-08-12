@@ -51,7 +51,8 @@ class ScopedQueryServiceIntegrationTests {
         marker = "task14-" + UUID.randomUUID();
         dataScope = mock(DataScopeService.class);
         lotteryQueries = new LotteryQueryServiceImpl(activityMapper, orderMapper, recordMapper, benefitMapper, dataScope);
-        benefitQueries = new BenefitQueryServiceImpl(benefitMapper, recordMapper, fulfillmentTaskMapper, dataScope);
+        benefitQueries = new BenefitQueryServiceImpl(benefitMapper, recordMapper, fulfillmentTaskMapper,
+                org.mockito.Mockito.mock(com.dongqh.luckyhub.shipping.mapper.ShippingOrderMapper.class), dataScope);
         LoginContext.set(new LoginPrincipal(SELF, "task14", "session"));
         deleteFixedTestUsers();
         seed(SELF, marker + "-self", 1);

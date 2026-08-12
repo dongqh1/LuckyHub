@@ -178,12 +178,14 @@ class PointsDomainContractTests {
                 "id", "redemptionNo", "userId", "skuId", "quantity", "unitPoints", "totalPoints",
                 "productCode", "productName", "skuCode", "skuName", "productType", "imageUrl",
                 "status", "reversalNo", "failureReason", "addressSnapshot", "shippingOrderId",
+                "shippingNo", "shippingStatus",
                 "createdAt", "updatedAt"
         }, new Class<?>[]{
                 Long.class, String.class, Long.class, Long.class, Integer.class, Long.class, Long.class,
                 String.class, String.class, String.class, String.class, ProductType.class, String.class,
                 requiredClass("enums.PointsRedemptionStatus"), String.class, String.class,
-                ShippingAddressSnapshotView.class, Long.class,
+                ShippingAddressSnapshotView.class, Long.class, String.class,
+                com.dongqh.luckyhub.shipping.enums.ShippingStatus.class,
                 LocalDateTime.class, LocalDateTime.class
         });
     }

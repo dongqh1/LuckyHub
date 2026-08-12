@@ -14,6 +14,7 @@ import com.dongqh.luckyhub.points.enums.PointsErrorCode;
 import com.dongqh.luckyhub.points.service.PointsAccountService;
 import com.dongqh.luckyhub.points.service.PointsRedemptionService;
 import org.junit.jupiter.api.Test;
+import com.dongqh.luckyhub.shipping.enums.ShippingStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -45,6 +46,8 @@ class PhysicalSourceShippingTests extends Task5ShippingTestFixture {
 
         var order = cashOrders.get(userId, orderNo);
         assertThat(order.shippingOrderId()).isNotNull();
+        assertThat(order.shippingNo()).startsWith("SHIPPING-");
+        assertThat(order.shippingStatus()).isEqualTo(ShippingStatus.FULFILLING);
         String fulfillmentNo = "LOGISTICS-" + order.shippingOrderId();
         trackFulfillment(fulfillmentNo);
         assertThat(jdbc.queryForObject(
@@ -70,6 +73,8 @@ class PhysicalSourceShippingTests extends Task5ShippingTestFixture {
                 new CreatePointsRedemptionCommand(redemptionNo, skuId, 1, addressId));
 
         assertThat(repeated.shippingOrderId()).isEqualTo(first.shippingOrderId()).isNotNull();
+        assertThat(repeated.shippingNo()).startsWith("SHIPPING-");
+        assertThat(repeated.shippingStatus()).isEqualTo(ShippingStatus.FULFILLING);
         String fulfillmentNo = "LOGISTICS-" + first.shippingOrderId();
         trackFulfillment(fulfillmentNo);
         assertThat(jdbc.queryForObject(

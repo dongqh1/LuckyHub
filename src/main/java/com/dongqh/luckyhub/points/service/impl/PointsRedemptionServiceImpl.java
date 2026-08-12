@@ -30,6 +30,8 @@ import com.dongqh.luckyhub.shipping.service.ShippingAddressSnapshotService;
 import com.dongqh.luckyhub.shipping.service.ShippingOrderService;
 import com.dongqh.luckyhub.shipping.model.CreateShippingOrderCommand;
 import com.dongqh.luckyhub.shipping.vo.ShippingAddressSnapshotView;
+import com.dongqh.luckyhub.shipping.entity.ShippingOrder;
+import com.dongqh.luckyhub.shipping.mapper.ShippingOrderMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +50,7 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     private final PointsRedemptionOrderMapper orderMapper;
     private final ShippingAddressSnapshotService snapshotService;
     private final ShippingOrderService shippingOrderService;
+    private final ShippingOrderMapper shippingOrderMapper;
 
     public PointsRedemptionServiceImpl(
             CatalogService catalogService,
@@ -55,7 +58,8 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
             ChannelInventoryService inventoryService,
             PointsRedemptionOrderMapper orderMapper,
             ShippingAddressSnapshotService snapshotService,
-            ShippingOrderService shippingOrderService
+            ShippingOrderService shippingOrderService,
+            ShippingOrderMapper shippingOrderMapper
     ) {
         this.catalogService = catalogService;
         this.accountService = accountService;
@@ -63,6 +67,7 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
         this.orderMapper = orderMapper;
         this.snapshotService = snapshotService;
         this.shippingOrderService = shippingOrderService;
+        this.shippingOrderMapper = shippingOrderMapper;
     }
 
     @Override
@@ -244,6 +249,8 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     }
 
     private PointsRedemptionView view(PointsRedemptionOrder order) {
+        ShippingOrder shipping = order.getShippingOrderId() == null ? null
+                : shippingOrderMapper.selectById(order.getShippingOrderId());
         return new PointsRedemptionView(
                 order.getId(), order.getRedemptionNo(), order.getUserId(), order.getSkuId(),
                 order.getQuantity(), order.getUnitPoints(), order.getTotalPoints(),
@@ -251,6 +258,8 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
                 order.getSkuName(), order.getProductType(), order.getImageUrl(),
                 order.getStatus(), order.getReversalNo(), order.getFailureReason(),
                 snapshotView(order.getAddressSnapshotId()), order.getShippingOrderId(),
+                shipping == null ? null : shipping.getShippingNo(),
+                shipping == null ? null : shipping.getStatus(),
                 order.getCreatedAt(), order.getUpdatedAt());
     }
 

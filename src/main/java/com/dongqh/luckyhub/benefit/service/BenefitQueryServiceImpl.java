@@ -14,6 +14,8 @@ import com.dongqh.luckyhub.lottery.entity.LotteryDrawRecord;
 import com.dongqh.luckyhub.lottery.mapper.LotteryDrawRecordMapper;
 import com.dongqh.luckyhub.fulfillment.entity.FulfillmentTask;
 import com.dongqh.luckyhub.fulfillment.mapper.FulfillmentTaskMapper;
+import com.dongqh.luckyhub.shipping.entity.ShippingOrder;
+import com.dongqh.luckyhub.shipping.mapper.ShippingOrderMapper;
 import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
 import com.dongqh.luckyhub.rbac.service.DataScopeService;
 import com.dongqh.luckyhub.rbac.service.UserDataScope;
@@ -32,12 +34,13 @@ public class BenefitQueryServiceImpl implements BenefitQueryService {
     private static final LocalDate MAX_SAFE_END_DATE=LocalDate.of(9999,12,30);
     private final UserBenefitMapper benefitMapper; private final LotteryDrawRecordMapper recordMapper;
     private final FulfillmentTaskMapper fulfillmentTaskMapper;
+    private final ShippingOrderMapper shippingOrderMapper;
     private final DataScopeService dataScopeService;
     public BenefitQueryServiceImpl(UserBenefitMapper benefitMapper, LotteryDrawRecordMapper recordMapper,
-                                   FulfillmentTaskMapper fulfillmentTaskMapper,
+                                   FulfillmentTaskMapper fulfillmentTaskMapper, ShippingOrderMapper shippingOrderMapper,
                                    DataScopeService dataScopeService) {
         this.benefitMapper=benefitMapper; this.recordMapper=recordMapper;
-        this.fulfillmentTaskMapper=fulfillmentTaskMapper; this.dataScopeService=dataScopeService;
+        this.fulfillmentTaskMapper=fulfillmentTaskMapper; this.shippingOrderMapper=shippingOrderMapper; this.dataScopeService=dataScopeService;
     }
     @Override public PageResponse<BenefitView> page(BenefitQuery query) {
         validate(query);
@@ -87,10 +90,12 @@ public class BenefitQueryServiceImpl implements BenefitQueryService {
                 .collect(Collectors.toMap(FulfillmentTask::getFulfillmentNo,Function.identity()));
     }
     private BenefitView toView(UserBenefit benefit,LotteryDrawRecord record,FulfillmentTask task){
+        ShippingOrder shipping=benefit.getShippingOrderId()==null?null:shippingOrderMapper.selectById(benefit.getShippingOrderId());
         return new BenefitView(benefit.getId(),benefit.getDrawRecordId(),benefit.getUserId(),benefit.getPrizeId(),
                 benefit.getPrizeType(),record==null?null:record.getPrizeName(),record==null?null:record.getPrizeImageUrl(),
                 benefit.getQuantity(),benefit.getStatus(),benefit.getObtainedAt(),benefit.getExpireAt(),
                 benefit.getRewardDefinitionId(),benefit.getRewardType(),benefit.getRewardQuantity(),
-                benefit.getFulfillmentNo(),task==null?null:task.getStatus());
+                benefit.getFulfillmentNo(),task==null?null:task.getStatus(),
+                shipping==null?null:shipping.getShippingNo(),shipping==null?null:shipping.getStatus());
     }
 }

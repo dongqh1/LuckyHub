@@ -216,6 +216,9 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
         } else if (order.getStatus() == ShippingStatus.FULFILLING) {
             jdbc.update("UPDATE user_benefit SET status='FULFILLING' WHERE id=? AND status='FULFILLMENT_FAILED'",
                     Long.valueOf(order.getSourceId()));
+        } else if (order.getStatus() == ShippingStatus.SHIPPED) {
+            jdbc.update("UPDATE user_benefit SET status='SHIPPED' WHERE id=? AND status IN ('CLAIMED','FULFILLING','FULFILLMENT_FAILED')",
+                    Long.valueOf(order.getSourceId()));
         }
     }
 
@@ -226,7 +229,8 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
                 order.getFulfillmentNo(), order.getCarrierCode(), order.getCarrierName(),
                 order.getWaybillNo(), order.getStatus(), order.getLastErrorCode(),
                 order.getLastErrorMessage(), order.getShippedAt(), order.getDeliveredAt(),
-                order.getFailedAt(), order.getTerminatedAt(), order.getCreatedAt(), order.getUpdatedAt());
+                order.getFailedAt(), order.getTerminatedAt(), order.getCreatedAt(), order.getUpdatedAt(),
+                null, null, null);
     }
 
     private String required(String value) {
