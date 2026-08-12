@@ -104,6 +104,8 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
         ShippingOrder order = mapper.selectOne(new LambdaQueryWrapper<ShippingOrder>()
                 .eq(ShippingOrder::getFulfillmentNo, required(fulfillmentNo)));
         if (order == null) return;
+        if (order.getStatus() == ShippingStatus.DELIVERED
+                || order.getStatus() == ShippingStatus.TERMINATED) return;
         ShippingStatus observedStatus = order.getStatus();
         Integer observedVersion = order.getVersion();
         FulfillmentTaskView task = fulfillmentTasks.get(fulfillmentNo);
@@ -148,6 +150,7 @@ public class ShippingOrderServiceImpl implements ShippingOrderService {
                     last_error_code=?, last_error_message=?, shipped_at=?, failed_at=?,
                     terminated_at=?, version=version+1, updated_at=CURRENT_TIMESTAMP(3)
                 WHERE id=? AND version=? AND status=?
+                  AND status NOT IN ('DELIVERED','TERMINATED')
                 """, order.getCarrierCode(), order.getCarrierName(), order.getWaybillNo(),
                 order.getStatus().name(), order.getLastErrorCode(), order.getLastErrorMessage(),
                 order.getShippedAt(), order.getFailedAt(), order.getTerminatedAt(), order.getId(),

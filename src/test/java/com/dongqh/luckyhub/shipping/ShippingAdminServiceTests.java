@@ -37,10 +37,53 @@ class ShippingAdminServiceTests {
         when(fulfillment.retryQuarantined(eq("LOGISTICS-7"), eq(77L), anyString()))
                 .thenReturn(task(FulfillmentStatus.PENDING));
 
-        service.retry("SHIPPING-7", 77L, "  " + "a".repeat(700) + "  ");
+        String longSafeReason = "人工核验通过，确认可重试。".repeat(50);
+        service.retry("SHIPPING-7", 77L, "  " + longSafeReason + "  ");
 
-        verify(fulfillment).retryQuarantined("LOGISTICS-7", 77L, "a".repeat(500));
+        verify(fulfillment).retryQuarantined("LOGISTICS-7", 77L, longSafeReason.substring(0, 500));
         verify(shipping).projectFulfillmentState("LOGISTICS-7");
+    }
+
+    @Test
+    void safeOperationalReasonCanIncludeABoundedTicketReference() {
+        ShippingOrder failed = order(ShippingStatus.FAILED);
+        when(orders.lockByShippingNo("SHIPPING-7")).thenReturn(failed);
+        when(orders.selectByShippingNo("SHIPPING-7")).thenReturn(failed);
+        when(snapshots.selectById(4L)).thenReturn(snapshot());
+        when(fulfillment.get("LOGISTICS-7")).thenReturn(task(FulfillmentStatus.QUARANTINED));
+
+        service.retry("SHIPPING-7", 77L, "人工核验通过，确认可重试，工单 TASK-42");
+
+        verify(fulfillment).retryQuarantined("LOGISTICS-7", 77L,
+                "人工核验通过，确认可重试，工单 TASK-42");
+    }
+
+    @Test
+    void rejectsChinesePiiStructuredTextAndSensitiveContentWithoutEchoingInput() {
+        ShippingOrder failed = order(ShippingStatus.FAILED);
+        when(orders.lockByShippingNo("SHIPPING-7")).thenReturn(failed);
+        when(fulfillment.get("LOGISTICS-7")).thenReturn(task(FulfillmentStatus.QUARANTINED));
+        String[] unsafeNotes = {
+                "人工核验通过，收件人张三",
+                "人工核验通过，手机号13800138000",
+                "人工核验通过，身份证330106199001011234",
+                "人工核验通过，座机0571-87654321",
+                "人工核验通过，浙江省杭州市西湖区文三路90号",
+                "{\"reason\":\"人工核验通过\"}",
+                "人工核验通过\n确认可重试",
+                "人工核验通过\u0001确认可重试",
+                "人工核验通过，粘贴payload"
+        };
+
+        for (String unsafeNote : unsafeNotes) {
+            assertThatThrownBy(() -> service.retry("SHIPPING-7", 77L, unsafeNote))
+                    .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                        assertThat(ex.getErrorCode()).isEqualTo(ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+                        assertThat(ex.getMessage()).doesNotContain(unsafeNote);
+                    });
+        }
+        verify(fulfillment, never()).retryQuarantined(anyString(), anyLong(), any());
+        verifyNoInteractions(shipping);
     }
 
     @Test

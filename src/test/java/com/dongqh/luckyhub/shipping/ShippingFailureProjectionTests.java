@@ -9,6 +9,7 @@ import java.util.stream.LongStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
+import org.mockito.ArgumentCaptor;
 import com.dongqh.luckyhub.fulfillment.enums.*;
 import com.dongqh.luckyhub.fulfillment.service.FulfillmentTaskService;
 import com.dongqh.luckyhub.fulfillment.vo.FulfillmentTaskView;
@@ -75,10 +76,46 @@ class ShippingFailureProjectionTests extends Task5ShippingTestFixture {
     }
 
     @Test
+    void succeededFulfillmentNeverRevivesATerminatedShipmentAndCasKeepsTerminalGuard() {
+        ShippingOrderMapper orders = mock(ShippingOrderMapper.class);
+        ShippingOrder terminated = new ShippingOrder();
+        terminated.setId(8L); terminated.setFulfillmentNo("LOGISTICS-8");
+        terminated.setSourceType(ShippingSourceType.CASH_ORDER); terminated.setSourceId("ORDER-8");
+        terminated.setStatus(ShippingStatus.TERMINATED); terminated.setVersion(3);
+        when(orders.selectOne(any())).thenReturn(terminated);
+        FulfillmentTaskService fulfillment = mock(FulfillmentTaskService.class);
+        when(fulfillment.get("LOGISTICS-8")).thenReturn(new FulfillmentTaskView(8L, "LOGISTICS-8",
+                "CASH_ORDER", "ORDER-8", FulfillmentType.LOGISTICS, 9L, null, "f",
+                FulfillmentStatus.SUCCEEDED, 1, 5, null, "WB-8", null, null, null, null, null, null));
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        var service = new ShippingOrderServiceImpl(orders, mock(ShippingAddressSnapshotService.class), fulfillment, jdbc);
+
+        service.projectFulfillmentState("LOGISTICS-8");
+
+        verifyNoInteractions(jdbc);
+
+        ShippingOrder fulfilling = new ShippingOrder();
+        fulfilling.setId(9L); fulfilling.setFulfillmentNo("LOGISTICS-9");
+        fulfilling.setSourceType(ShippingSourceType.CASH_ORDER); fulfilling.setSourceId("ORDER-9");
+        fulfilling.setStatus(ShippingStatus.FULFILLING); fulfilling.setVersion(4);
+        when(orders.selectOne(any())).thenReturn(fulfilling);
+        when(fulfillment.get("LOGISTICS-9")).thenReturn(new FulfillmentTaskView(9L, "LOGISTICS-9",
+                "CASH_ORDER", "ORDER-9", FulfillmentType.LOGISTICS, 9L, null, "f",
+                FulfillmentStatus.SUCCEEDED, 1, 5, null, "WB-9", null, null, null, null, null, null));
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        service.projectFulfillmentState("LOGISTICS-9");
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).update(sql.capture(), any(Object[].class));
+        assertThat(sql.getValue()).contains("status NOT IN ('DELIVERED','TERMINATED')");
+    }
+
+    @Test
     void projectorUsesAscendingBoundedCandidatesAndIsolatesEachFailure() {
         var orders = mock(com.dongqh.luckyhub.shipping.mapper.ShippingOrderMapper.class);
         var worker = mock(ShippingProjectionWorker.class);
-        var ids = LongStream.rangeClosed(1, 101).boxed().toList();
+        var ids = LongStream.rangeClosed(1, 100).boxed().toList();
         when(orders.selectProjectionCandidateIds(100)).thenReturn(ids);
         when(worker.projectOne(anyLong())).thenReturn(true);
         when(worker.projectOne(2L)).thenThrow(new IllegalStateException("raw provider exception with secret"));
@@ -91,5 +128,20 @@ class ShippingFailureProjectionTests extends Task5ShippingTestFixture {
         verify(worker).projectOne(2L);
         verify(worker).projectOne(100L);
         verify(worker, never()).projectOne(101L);
+    }
+
+    @Test
+    void projectorPreservesFulfillmentTaskQueueOrderWhenShippingIdsAreReversed() {
+        var orders = mock(ShippingOrderMapper.class);
+        var worker = mock(ShippingProjectionWorker.class);
+        when(orders.selectProjectionCandidateIds(100)).thenReturn(java.util.List.of(200L, 100L));
+        when(worker.projectOne(anyLong())).thenReturn(true);
+        var service = new ShippingAdminServiceImpl(orders, null, null, null, worker);
+
+        assertThat(service.projectPending()).isEqualTo(2);
+
+        var inOrder = inOrder(worker);
+        inOrder.verify(worker).projectOne(200L);
+        inOrder.verify(worker).projectOne(100L);
     }
 }
