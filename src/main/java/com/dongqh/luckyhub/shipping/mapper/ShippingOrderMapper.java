@@ -17,6 +17,9 @@ public interface ShippingOrderMapper extends BaseMapper<ShippingOrder> {
     @Select("SELECT * FROM shipping_order WHERE waybill_no=#{waybillNo} FOR UPDATE")
     ShippingOrder lockByWaybillNo(@Param("waybillNo") String waybillNo);
 
+    @Select("SELECT * FROM shipping_order WHERE fulfillment_no=#{fulfillmentNo}")
+    ShippingOrder selectByFulfillmentNo(@Param("fulfillmentNo") String fulfillmentNo);
+
     @Select("SELECT * FROM shipping_order WHERE claim_request_id=#{claimRequestId}")
     ShippingOrder selectByClaimRequestId(@Param("claimRequestId") String claimRequestId);
 }

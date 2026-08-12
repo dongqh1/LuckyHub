@@ -16,12 +16,15 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpMethod;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public class AuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String LOGISTICS_CALLBACK_PATH = "/api/shipping/callbacks/logistics";
 
     private static final String AUTHORIZATION = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -38,6 +41,12 @@ public class AuthenticationFilter extends OncePerRequestFilter {
         this.jwtService = jwtService;
         this.sessionService = sessionService;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return HttpMethod.POST.matches(request.getMethod())
+                && LOGISTICS_CALLBACK_PATH.equals(request.getRequestURI());
     }
 
     @Override
