@@ -31,10 +31,13 @@ import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 @Service
 public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
     private static final DateTimeFormatter EVENT_TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final Pattern SIGNED_IDENTIFIER =
+            Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]{0,99}");
 
     private final LogisticsCallbackSigner signer;
     private final ShippingProperties properties;
@@ -84,12 +87,12 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
             ShippingCallbackReceipt existing = receipts.selectByCallbackId(command.callbackId());
             if (existing != null && sameReceipt(existing, command, nonceDigest, signatureDigest)) {
                 return "REJECTED".equals(existing.getStatus())
-                        ? ShippingErrorCode.SHIPPING_NOT_FOUND : null;
+                        ? rejectedCode(existing.getErrorCode()) : null;
             }
             return ShippingErrorCode.CALLBACK_REPLAYED;
         }
 
-        ShippingOrder order = orders.lockByWaybillNo(command.waybillNo().trim());
+        ShippingOrder order = orders.lockByWaybillNo(command.waybillNo());
         if (order == null) {
             reject(receipt, ShippingErrorCode.SHIPPING_NOT_FOUND, receivedAt);
             return ShippingErrorCode.SHIPPING_NOT_FOUND;
@@ -111,7 +114,7 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
         ShippingTrackingEvent event = new ShippingTrackingEvent();
         event.setShippingOrderId(order.getId());
         event.setProviderEventId(providerEventId(command));
-        event.setWaybillNo(command.waybillNo().trim());
+        event.setWaybillNo(command.waybillNo());
         event.setEventType(command.eventType());
         event.setLocationSummary(normalizeOptional(command.locationSummary()));
         event.setDescription(normalizeOptional(command.description()));
@@ -148,10 +151,10 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
             String signatureDigest, LocalDateTime receivedAt
     ) {
         ShippingCallbackReceipt receipt = new ShippingCallbackReceipt();
-        receipt.setCallbackId(command.callbackId().trim());
+        receipt.setCallbackId(command.callbackId());
         receipt.setNonceDigest(nonceDigest);
         receipt.setSignatureDigest(signatureDigest);
-        receipt.setWaybillNo(command.waybillNo().trim());
+        receipt.setWaybillNo(command.waybillNo());
         receipt.setEventType(command.eventType());
         receipt.setEventTime(databaseTime(command.eventTime()));
         receipt.setStatus("RECEIVED");
@@ -173,7 +176,7 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
     ) {
         return Objects.equals(existing.getNonceDigest(), nonceDigest)
                 && Objects.equals(existing.getSignatureDigest(), signatureDigest)
-                && Objects.equals(existing.getWaybillNo(), command.waybillNo().trim())
+                && Objects.equals(existing.getWaybillNo(), command.waybillNo())
                 && existing.getEventType() == command.eventType()
                 && Objects.equals(existing.getEventTime(), databaseTime(command.eventTime()));
     }
@@ -186,9 +189,9 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
 
     private void validate(LogisticsCallbackCommand command) {
         if (command == null
-                || invalid(command.callbackId(), 100)
-                || invalid(command.nonce(), 100)
-                || invalid(command.waybillNo(), 100)
+                || invalidSignedIdentifier(command.callbackId())
+                || invalidSignedIdentifier(command.nonce())
+                || invalidSignedIdentifier(command.waybillNo())
                 || command.eventType() == null
                 || command.eventTime() == null
                 || invalidOptional(command.locationSummary(), 200)
@@ -200,6 +203,10 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
 
     private boolean invalid(String value, int max) {
         return value == null || value.isBlank() || value.length() > max;
+    }
+
+    private boolean invalidSignedIdentifier(String value) {
+        return value == null || !SIGNED_IDENTIFIER.matcher(value).matches();
     }
 
     private boolean invalidOptional(String value, int max) {
@@ -237,8 +244,17 @@ public class LogisticsCallbackServiceImpl implements LogisticsCallbackService {
     }
 
     private String providerEventId(LogisticsCallbackCommand command) {
-        return digest(command.waybillNo().trim() + '\n' + command.eventType().name() + '\n'
+        return digest(command.waybillNo() + '\n' + command.eventType().name() + '\n'
                 + EVENT_TIME_FORMAT.format(command.eventTime()));
+    }
+
+    private ShippingErrorCode rejectedCode(String storedCode) {
+        for (ShippingErrorCode candidate : ShippingErrorCode.values()) {
+            if (Integer.toString(candidate.code()).equals(storedCode)) {
+                return candidate;
+            }
+        }
+        return ShippingErrorCode.CALLBACK_REPLAYED;
     }
 
     private LocalDateTime databaseTime(LocalDateTime value) {

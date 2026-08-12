@@ -38,7 +38,6 @@ public class PermissionInterceptorConfig
                         "/api/payments/**",
                         "/api/shipping/**"
                 )
-                .excludePathPatterns("/api/shipping/callbacks/logistics")
                 .order(100);
     }
 }

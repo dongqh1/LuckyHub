@@ -61,6 +61,43 @@ class LogisticsCallbackTests extends Task5ShippingTestFixture {
     }
 
     @Test
+    void rejectsCanonicalDelimiterInjectionSoOneSignatureCannotRepresentDifferentTuples() {
+        Fixture fixture = shipped(ShippingSourceType.CASH_ORDER);
+        long timestamp = System.currentTimeMillis() / 1000;
+        LocalDateTime eventTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        LogisticsCallbackCommand first = new LogisticsCallbackCommand(
+                "part-a\npart-b", "part-c", timestamp, fixture.waybillNo(),
+                TrackingEventType.IN_TRANSIT, eventTime, "杭州", "运输中", null);
+        LogisticsCallbackCommand second = new LogisticsCallbackCommand(
+                "part-a", "part-b\npart-c", timestamp, fixture.waybillNo(),
+                TrackingEventType.IN_TRANSIT, eventTime, "杭州", "运输中", null);
+        LogisticsCallbackCommand signedFirst = withSignature(first);
+        LogisticsCallbackCommand signedSecond = withSignature(second);
+
+        assertThat(signedFirst.signature()).isEqualTo(signedSecond.signature());
+        assertError(() -> callbacks.handle(signedFirst), ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        assertError(() -> callbacks.handle(signedSecond), ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        assertThat(count("shipping_callback_receipt", "waybill_no", fixture.waybillNo())).isZero();
+    }
+
+    @Test
+    void rejectsIdentifierWhitespaceAndControlCharactersWithoutTrimmedPersistence() {
+        Fixture fixture = shipped(ShippingSourceType.CASH_ORDER);
+        LocalDateTime eventTime = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+        LogisticsCallbackCommand paddedCallback = signed(
+                fixture.waybillNo(), TrackingEventType.IN_TRANSIT, eventTime,
+                " " + unique("CALLBACK"), unique("NONCE"));
+        LogisticsCallbackCommand controlledWaybill = signed(
+                fixture.waybillNo() + "\r", TrackingEventType.IN_TRANSIT, eventTime,
+                unique("CALLBACK"), unique("NONCE"));
+
+        assertError(() -> callbacks.handle(paddedCallback), ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        assertError(() -> callbacks.handle(paddedCallback), ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        assertError(() -> callbacks.handle(controlledWaybill), ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        assertThat(count("shipping_callback_receipt", "waybill_no", fixture.waybillNo())).isZero();
+    }
+
+    @Test
     void rejectsTamperingAndOldOrFutureTimestampsWithoutPersistingSecrets() {
         Fixture fixture = shipped(ShippingSourceType.CASH_ORDER);
         LogisticsCallbackCommand valid = signed(fixture.waybillNo(), TrackingEventType.PICKED_UP,
@@ -107,6 +144,22 @@ class LogisticsCallbackTests extends Task5ShippingTestFixture {
         assertThat(jdbc.queryForObject(
                 "SELECT status FROM shipping_callback_receipt WHERE callback_id=?",
                 String.class, command.callbackId())).isEqualTo("REJECTED");
+    }
+
+    @Test
+    void rejectedStateConflictRetryKeepsOriginalSafeErrorCode() {
+        Fixture fixture = shipped(ShippingSourceType.CASH_ORDER);
+        jdbc.update("UPDATE shipping_order SET status='FAILED' WHERE shipping_no=?", fixture.shippingNo());
+        LogisticsCallbackCommand command = signed(
+                fixture.waybillNo(), TrackingEventType.IN_TRANSIT,
+                LocalDateTime.now(), unique("CALLBACK"), unique("NONCE"));
+
+        assertError(() -> callbacks.handle(command), ShippingErrorCode.SHIPPING_STATE_CONFLICT);
+        assertError(() -> callbacks.handle(command), ShippingErrorCode.SHIPPING_STATE_CONFLICT);
+        assertThat(jdbc.queryForObject(
+                "SELECT error_code FROM shipping_callback_receipt WHERE callback_id=?",
+                String.class, command.callbackId()))
+                .isEqualTo(Integer.toString(ShippingErrorCode.SHIPPING_STATE_CONFLICT.code()));
     }
 
     @Test

@@ -16,9 +16,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,12 +33,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(ShippingQueryControllerTests.CallbackMethodProbe.class)
 class ShippingQueryControllerTests {
     @Autowired MockMvc mvc;
     @MockitoBean LogisticsCallbackService callbacks;
@@ -65,6 +71,18 @@ class ShippingQueryControllerTests {
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/shipping/orders/SHIPPING-1"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void callbackPermissionExemptionAppliesOnlyToPostEvenWithValidJwt() throws Exception {
+        when(permissions.findPermissionCodes(77L)).thenReturn(Set.of());
+
+        mvc.perform(get("/api/shipping/callbacks/logistics")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/shipping/callbacks/logistics")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -110,5 +128,16 @@ class ShippingQueryControllerTests {
                  "waybillNo":"SIM-L-1","eventType":"IN_TRANSIT","eventTime":"2026-08-12T10:00:00",
                  "locationSummary":"杭州中转站","description":"运输中","signature":"signature"}
                 """;
+    }
+
+    @RestController
+    static class CallbackMethodProbe {
+        @GetMapping("/api/shipping/callbacks/logistics")
+        void getCallbackRoute() {
+        }
+
+        @PutMapping("/api/shipping/callbacks/logistics")
+        void putCallbackRoute() {
+        }
     }
 }
