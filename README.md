@@ -54,7 +54,7 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 迷你商城、积分、优惠券、会员和物流的已批准总体设计见
 [`docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md`](docs/superpowers/specs/2026-08-08-lottery-mini-mall-design.md)。
 
-六阶段开发顺序、恢复检查和当前阶段入口见
+阶段 1–6 的完成路线、恢复检查和下一目标决策入口见
 [`docs/LuckyHub-迷你商城下一阶段执行总路线.md`](docs/LuckyHub-迷你商城下一阶段执行总路线.md)。
 
 阶段 1 商品、统一奖励与渠道库存的详细实施记录见
@@ -82,12 +82,27 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 阶段 5 抽奖统一奖励、五类奖励时间线、权益查询字段和幂等安全说明见
 [`docs/lottery-reward-fulfillment-api.md`](docs/lottery-reward-fulfillment-api.md)。
 
-当前数据库迁移已到 V16。可运行产物使用以下命令生成和启动：
+阶段 6 三种实物来源、地址、领取、模拟物流、用户/管理员查询和可执行脱敏示例见
+[`docs/physical-shipping-api.md`](docs/physical-shipping-api.md)。
+
+阶段 6 的最终交付证据和面向新接手者的通俗说明见
+[`docs/progress/阶段6-任务9-阶段交付完成介绍.md`](docs/progress/阶段6-任务9-阶段交付完成介绍.md) 和
+[`docs/progress/阶段6-最终交付通俗总结.md`](docs/progress/阶段6-最终交付通俗总结.md)。
+
+当前数据库迁移已到 V17。可运行产物使用以下命令生成和启动：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'
 java -jar .\target\luckyhub-0.0.1-SNAPSHOT.jar
 ```
+
+正式空库交付检查：
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Phase6FreshMigration.ps1
+```
+
+例如在新电脑上启动 MySQL 与 Redis、准备空数据库环境后，脚本会从 V1 迁移到 V17 并核对 48 张业务表；再启动上述 JAR，访问 `/v3/api-docs` 可以看到阶段 6 的地址、实物领取、物流查询、轨迹回调、管理员和模拟物流接口。真实快递、退款、退货和售后仍不在当前交付范围内。
 
 阶段 1 的 11 个接口、权限、请求响应、错误码、数据模型和 PowerShell 示例见
 [`docs/catalog-reward-inventory-api.md`](docs/catalog-reward-inventory-api.md)。

@@ -1,3 +1,31 @@
 package com.dongqh.luckyhub.fulfillment.model;
+
 import com.dongqh.luckyhub.fulfillment.enums.FulfillmentType;
-public record LogisticsFulfillmentPayload(String skuCode,int quantity,String receiverMasked,String phoneMasked,String regionMasked) implements FulfillmentPayload {public LogisticsFulfillmentPayload{skuCode=PayloadValidation.required(skuCode,"skuCode");quantity=PayloadValidation.positive(quantity,"quantity");receiverMasked=PayloadValidation.required(receiverMasked,"receiverMasked");phoneMasked=PayloadValidation.required(phoneMasked,"phoneMasked");regionMasked=PayloadValidation.required(regionMasked,"regionMasked");if(!receiverMasked.contains("*")||!phoneMasked.matches("\\d{3}\\*{4}\\d{4}")||!regionMasked.contains("*"))throw new IllegalArgumentException("物流收件信息必须脱敏");}public FulfillmentType fulfillmentType(){return FulfillmentType.LOGISTICS;}}
+
+public record LogisticsFulfillmentPayload(
+        long shippingOrderId,
+        String skuCode,
+        int quantity,
+        String receiverMasked,
+        String phoneMasked,
+        String regionMasked
+) implements FulfillmentPayload {
+    public LogisticsFulfillmentPayload {
+        shippingOrderId = PayloadValidation.positive(shippingOrderId, "shippingOrderId");
+        skuCode = PayloadValidation.required(skuCode, "skuCode");
+        quantity = PayloadValidation.positive(quantity, "quantity");
+        receiverMasked = PayloadValidation.required(receiverMasked, "receiverMasked");
+        phoneMasked = PayloadValidation.required(phoneMasked, "phoneMasked");
+        regionMasked = PayloadValidation.required(regionMasked, "regionMasked");
+        if (!receiverMasked.contains("*")
+                || !phoneMasked.matches("\\d{3}\\*{4}\\d{4}")
+                || !regionMasked.contains("*")) {
+            throw new IllegalArgumentException("物流收件信息必须脱敏");
+        }
+    }
+
+    @Override
+    public FulfillmentType fulfillmentType() {
+        return FulfillmentType.LOGISTICS;
+    }
+}

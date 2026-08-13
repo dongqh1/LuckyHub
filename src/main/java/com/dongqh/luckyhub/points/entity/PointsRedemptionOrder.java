@@ -35,6 +35,8 @@ public class PointsRedemptionOrder {
     private PointsRedemptionStatus status;
     private String reversalNo;
     private String failureReason;
+    private Long addressSnapshotId;
+    private Long shippingOrderId;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
     @TableField(fill = FieldFill.INSERT_UPDATE)

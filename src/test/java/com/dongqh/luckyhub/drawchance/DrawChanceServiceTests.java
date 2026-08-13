@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest
+@SpringBootTest(properties = "luckyhub.lottery.reconciliation-enabled=false")
 class DrawChanceServiceTests {
     @Autowired DrawChanceService service;
     @Autowired JdbcTemplate jdbc;
@@ -95,9 +95,9 @@ class DrawChanceServiceTests {
         var failed = service.reserve(command(prefix + "-failed", 1));
         insertOrder(success.requestId(), "SUCCESS");
         insertOrder(failed.requestId(), "FAILED");
-        jdbc.update("UPDATE draw_chance_reservation SET created_at=DATE_SUB(NOW(),INTERVAL 2 HOUR) WHERE user_id=?", userId);
+        jdbc.update("UPDATE draw_chance_reservation SET created_at='1000-01-01 00:00:00' WHERE user_id=?", userId);
 
-        assertThat(service.reconcileExpired(10, LocalDateTime.now().minusHours(1))).isEqualTo(2);
+        assertThat(service.reconcileExpired(2, LocalDateTime.now().minusHours(1))).isEqualTo(2);
         assertThat(service.get(userId).availableBalance()).isEqualTo(1);
         assertThat(service.get(userId).reservedBalance()).isZero();
         assertThat(jdbc.queryForList("SELECT status FROM draw_chance_reservation WHERE user_id=? ORDER BY request_id",

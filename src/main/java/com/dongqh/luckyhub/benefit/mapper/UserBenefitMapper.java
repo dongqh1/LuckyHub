@@ -8,6 +8,9 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 public interface UserBenefitMapper extends BaseMapper<UserBenefit> {
 
     @Select("""
@@ -53,4 +56,41 @@ public interface UserBenefitMapper extends BaseMapper<UserBenefit> {
 
     @Update("UPDATE user_benefit SET fulfillment_no=#{fulfillmentNo},updated_at=CURRENT_TIMESTAMP(3) WHERE id=#{id} AND fulfillment_no IS NULL")
     int bindFulfillmentNo(@Param("id") long id, @Param("fulfillmentNo") String fulfillmentNo);
+
+    @Update("""
+            UPDATE user_benefit
+            SET status='CLAIM_PENDING', claim_deadline=#{deadline}, grant_error=NULL,
+                updated_at=CURRENT_TIMESTAMP(3)
+            WHERE id=#{id} AND status=#{expected}
+            """)
+    int markClaimPending(@Param("id") long id,
+                         @Param("expected") BenefitStatus expected,
+                         @Param("deadline") LocalDateTime deadline);
+
+    @Update("""
+            UPDATE user_benefit
+            SET status='FULFILLING', claimed_at=#{claimedAt}, shipping_order_id=#{shippingOrderId},
+                updated_at=CURRENT_TIMESTAMP(3)
+            WHERE id=#{id} AND status='CLAIM_PENDING' AND shipping_order_id IS NULL
+            """)
+    int markClaimed(@Param("id") long id,
+                    @Param("shippingOrderId") long shippingOrderId,
+                    @Param("claimedAt") LocalDateTime claimedAt);
+
+    @Select("""
+            SELECT id FROM user_benefit
+            WHERE status='CLAIM_PENDING' AND claim_deadline IS NOT NULL AND claim_deadline<=#{now}
+              AND id>#{afterId}
+            ORDER BY id LIMIT #{limit}
+            """)
+    List<Long> selectDueClaimIdsAfter(@Param("now") LocalDateTime now,
+                                      @Param("afterId") long afterId,
+                                      @Param("limit") int limit);
+
+    @Update("""
+            UPDATE user_benefit SET status='CLAIM_EXPIRED',updated_at=CURRENT_TIMESTAMP(3)
+            WHERE id=#{id} AND status='CLAIM_PENDING' AND claim_deadline IS NOT NULL
+              AND claim_deadline<=#{now}
+            """)
+    int markClaimExpired(@Param("id") long id, @Param("now") LocalDateTime now);
 }

@@ -74,7 +74,12 @@ class DatabaseSchemaMigrationTests {
             "draw_chance_account",
             "draw_chance_ledger",
             "draw_chance_reservation",
-            "lottery_reward_quarantine"
+            "lottery_reward_quarantine",
+            "user_shipping_address",
+            "shipping_address_snapshot",
+            "shipping_order",
+            "shipping_tracking_event",
+            "shipping_callback_receipt"
     );
 
     private static final Set<String> REQUIRED_UNIQUE_INDEXES = Set.of(
@@ -232,6 +237,16 @@ class DatabaseSchemaMigrationTests {
         Integer successfulMigrations = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM flyway_schema_history
                 WHERE version = '16' AND success = 1
+                """, Integer.class);
+
+        assertThat(successfulMigrations).isOne();
+    }
+
+    @Test
+    void addsPhysicalShippingPersistenceThroughVersionSeventeen() {
+        Integer successfulMigrations = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM flyway_schema_history
+                WHERE version = '17' AND success = 1
                 """, Integer.class);
 
         assertThat(successfulMigrations).isOne();

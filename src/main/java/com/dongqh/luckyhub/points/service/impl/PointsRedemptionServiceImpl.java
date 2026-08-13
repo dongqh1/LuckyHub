@@ -3,6 +3,7 @@ package com.dongqh.luckyhub.points.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.dongqh.luckyhub.catalog.model.RedeemableSkuSnapshot;
+import com.dongqh.luckyhub.catalog.enums.ProductType;
 import com.dongqh.luckyhub.catalog.service.CatalogService;
 import com.dongqh.luckyhub.common.exception.BusinessException;
 import com.dongqh.luckyhub.common.exception.ForbiddenException;
@@ -22,6 +23,15 @@ import com.dongqh.luckyhub.points.mapper.PointsRedemptionOrderMapper;
 import com.dongqh.luckyhub.points.service.PointsAccountService;
 import com.dongqh.luckyhub.points.service.PointsRedemptionService;
 import com.dongqh.luckyhub.points.vo.PointsRedemptionView;
+import com.dongqh.luckyhub.shipping.entity.ShippingAddressSnapshot;
+import com.dongqh.luckyhub.shipping.enums.ShippingErrorCode;
+import com.dongqh.luckyhub.shipping.enums.ShippingSourceType;
+import com.dongqh.luckyhub.shipping.service.ShippingAddressSnapshotService;
+import com.dongqh.luckyhub.shipping.service.ShippingOrderService;
+import com.dongqh.luckyhub.shipping.model.CreateShippingOrderCommand;
+import com.dongqh.luckyhub.shipping.vo.ShippingAddressSnapshotView;
+import com.dongqh.luckyhub.shipping.entity.ShippingOrder;
+import com.dongqh.luckyhub.shipping.mapper.ShippingOrderMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,17 +48,26 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
     private final PointsAccountService accountService;
     private final ChannelInventoryService inventoryService;
     private final PointsRedemptionOrderMapper orderMapper;
+    private final ShippingAddressSnapshotService snapshotService;
+    private final ShippingOrderService shippingOrderService;
+    private final ShippingOrderMapper shippingOrderMapper;
 
     public PointsRedemptionServiceImpl(
             CatalogService catalogService,
             PointsAccountService accountService,
             ChannelInventoryService inventoryService,
-            PointsRedemptionOrderMapper orderMapper
+            PointsRedemptionOrderMapper orderMapper,
+            ShippingAddressSnapshotService snapshotService,
+            ShippingOrderService shippingOrderService,
+            ShippingOrderMapper shippingOrderMapper
     ) {
         this.catalogService = catalogService;
         this.accountService = accountService;
         this.inventoryService = inventoryService;
         this.orderMapper = orderMapper;
+        this.snapshotService = snapshotService;
+        this.shippingOrderService = shippingOrderService;
+        this.shippingOrderMapper = shippingOrderMapper;
     }
 
     @Override
@@ -57,12 +76,13 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
         String redemptionNo = command.redemptionNo().trim();
         PointsRedemptionOrder existing = find(redemptionNo);
         if (existing != null) {
-            validateIdentity(existing, userId, command.skuId(), command.quantity());
+            validateIdentity(existing, userId, command.skuId(), command.quantity(), command.addressId());
             return view(existing);
         }
 
         RedeemableSkuSnapshot sku = catalogService.findRedeemableSku(command.skuId())
                 .orElseThrow(() -> error(PointsErrorCode.REDEMPTION_SKU_UNAVAILABLE));
+        validateAddressShape(sku.productType(), command.addressId());
         long totalPoints;
         try {
             totalPoints = Math.multiplyExact(sku.pointsPrice(), command.quantity().longValue());
@@ -74,8 +94,17 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
                 redemptionNo, userId, command.quantity(), sku, totalPoints);
         if (orderMapper.claim(order) != 1) {
             PointsRedemptionOrder winner = require(redemptionNo);
-            validateIdentity(winner, userId, command.skuId(), command.quantity());
+            validateIdentity(winner, userId, command.skuId(), command.quantity(), command.addressId());
             return view(winner);
+        }
+
+        if (command.addressId() != null) {
+            ShippingAddressSnapshot snapshot = snapshotService.create(userId, command.addressId(),
+                    ShippingSourceType.POINTS_REDEMPTION, String.valueOf(order.getId()));
+            if (orderMapper.attachAddressSnapshot(order.getId(), snapshot.getId()) != 1) {
+                throw shippingError(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            }
+            order.setAddressSnapshotId(snapshot.getId());
         }
 
         inventoryService.reserve(new ReserveChannelStockCommand(
@@ -86,6 +115,15 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
         inventoryService.confirm(redemptionNo);
         if (orderMapper.completeProcessing(redemptionNo) != 1) {
             throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
+        }
+        if (order.getProductType() == ProductType.PHYSICAL) {
+            var shipping = shippingOrderService.create(new CreateShippingOrderCommand(
+                    ShippingSourceType.POINTS_REDEMPTION, String.valueOf(order.getId()), order.getUserId(),
+                    order.getAddressSnapshotId(), order.getSkuCode(), order.getProductName(),
+                    order.getImageUrl(), order.getQuantity(), null));
+            if (orderMapper.attachShippingOrder(order.getId(), shipping.id()) != 1) {
+                throw shippingError(ShippingErrorCode.SHIPPING_IDEMPOTENCY_CONFLICT);
+            }
         }
         return view(require(redemptionNo));
     }
@@ -135,6 +173,9 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
             return view(order);
         }
         if (order.getStatus() != PointsRedemptionStatus.COMPLETED) {
+            throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
+        }
+        if (order.getShippingOrderId() != null) {
             throw error(PointsErrorCode.REDEMPTION_STATE_CONFLICT);
         }
 
@@ -196,26 +237,60 @@ public class PointsRedemptionServiceImpl implements PointsRedemptionService {
             PointsRedemptionOrder order,
             long userId,
             long skuId,
-            int quantity
+            int quantity,
+            Long addressId
     ) {
         if (!Objects.equals(order.getUserId(), userId)
                 || !Objects.equals(order.getSkuId(), skuId)
-                || !Objects.equals(order.getQuantity(), quantity)) {
+                || !Objects.equals(order.getQuantity(), quantity)
+                || !sameAddress(order, addressId)) {
             throw error(PointsErrorCode.POINTS_IDEMPOTENCY_CONFLICT);
         }
     }
 
     private PointsRedemptionView view(PointsRedemptionOrder order) {
+        ShippingOrder shipping = order.getShippingOrderId() == null ? null
+                : shippingOrderMapper.selectById(order.getShippingOrderId());
         return new PointsRedemptionView(
                 order.getId(), order.getRedemptionNo(), order.getUserId(), order.getSkuId(),
                 order.getQuantity(), order.getUnitPoints(), order.getTotalPoints(),
                 order.getProductCode(), order.getProductName(), order.getSkuCode(),
                 order.getSkuName(), order.getProductType(), order.getImageUrl(),
                 order.getStatus(), order.getReversalNo(), order.getFailureReason(),
+                snapshotView(order.getAddressSnapshotId()), order.getShippingOrderId(),
+                shipping == null ? null : shipping.getShippingNo(),
+                shipping == null ? null : shipping.getStatus(),
                 order.getCreatedAt(), order.getUpdatedAt());
     }
 
+    private void validateAddressShape(ProductType productType, Long addressId) {
+        if ((productType == ProductType.PHYSICAL) != (addressId != null)) {
+            throw shippingError(ShippingErrorCode.SHIPPING_REQUEST_INVALID);
+        }
+    }
+
+    private boolean sameAddress(PointsRedemptionOrder order, Long addressId) {
+        if (order.getAddressSnapshotId() == null) {
+            return addressId == null;
+        }
+        return addressId != null
+                && Objects.equals(snapshotService.require(order.getAddressSnapshotId()).getAddressId(), addressId);
+    }
+
+    private ShippingAddressSnapshotView snapshotView(Long snapshotId) {
+        if (snapshotId == null) {
+            return null;
+        }
+        ShippingAddressSnapshot snapshot = snapshotService.require(snapshotId);
+        return new ShippingAddressSnapshotView(snapshot.getId(), snapshot.getSnapshotNo(),
+                snapshot.getReceiverMasked(), snapshot.getPhoneMasked(), snapshot.getRegionMasked());
+    }
+
     private BusinessException error(PointsErrorCode errorCode) {
+        return new BusinessException(errorCode);
+    }
+
+    private BusinessException shippingError(ShippingErrorCode errorCode) {
         return new BusinessException(errorCode);
     }
 }

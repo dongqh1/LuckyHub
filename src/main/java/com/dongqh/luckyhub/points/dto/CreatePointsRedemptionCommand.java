@@ -10,6 +10,10 @@ import jakarta.validation.constraints.Size;
 public record CreatePointsRedemptionCommand(
         @NotBlank @Size(max = 64) String redemptionNo,
         @NotNull @Positive Long skuId,
-        @NotNull @Min(1) @Max(100) Integer quantity
+        @NotNull @Min(1) @Max(100) Integer quantity,
+        @Positive Long addressId
 ) {
+    public CreatePointsRedemptionCommand(String redemptionNo, Long skuId, Integer quantity) {
+        this(redemptionNo, skuId, quantity, null);
+    }
 }

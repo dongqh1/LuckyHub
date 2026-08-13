@@ -6,5 +6,6 @@ public enum InventoryOperation {
     RESERVE,
     CONFIRM,
     RELEASE,
-    RETURN
+    RETURN,
+    CLAIM_RETURN
 }

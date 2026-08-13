@@ -28,12 +28,16 @@ import com.dongqh.luckyhub.lottery.service.RewardIdentityMismatchException;
 import com.dongqh.luckyhub.reward.model.CouponRewardPayload;
 import com.dongqh.luckyhub.reward.model.MembershipRewardPayload;
 import com.dongqh.luckyhub.reward.model.PointsRewardPayload;
+import com.dongqh.luckyhub.shipping.config.ShippingProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchService {
@@ -46,6 +50,20 @@ public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchSe
     private final MessageConsumeRecordMapper consumeRecords;
     private final ObjectMapper json;
     private final String consumerName;
+    private final Duration claimPeriod;
+
+    @Autowired
+    public LotteryRewardDispatchServiceImpl(LotteryRewardIdentityService identities,
+            BenefitFulfillmentService legacyFulfillment, FulfillmentTaskService tasks,
+            DrawChanceService drawChances, UserBenefitMapper benefits,
+            LotteryRewardQuarantineMapper quarantines, MessageConsumeRecordMapper consumeRecords,
+            ObjectMapper json, MessagingProperties properties, ShippingProperties shippingProperties) {
+        this.identities = identities; this.legacyFulfillment = legacyFulfillment;
+        this.tasks = tasks; this.drawChances = drawChances; this.benefits = benefits;
+        this.quarantines = quarantines; this.consumeRecords = consumeRecords;
+        this.json = json; this.consumerName = properties.logicalConsumerName();
+        this.claimPeriod = shippingProperties.claimPeriod();
+    }
 
     public LotteryRewardDispatchServiceImpl(LotteryRewardIdentityService identities,
             BenefitFulfillmentService legacyFulfillment, FulfillmentTaskService tasks,
@@ -56,6 +74,7 @@ public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchSe
         this.tasks = tasks; this.drawChances = drawChances; this.benefits = benefits;
         this.quarantines = quarantines; this.consumeRecords = consumeRecords;
         this.json = json; this.consumerName = properties.logicalConsumerName();
+        this.claimPeriod = Duration.ofDays(7);
     }
 
     @Override
@@ -100,7 +119,7 @@ public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchSe
                 createTask(reward, fulfillmentNo, FulfillmentType.MEMBERSHIP,
                         new MembershipFulfillmentPayload(frozen.productCode(), frozen.durationDays()));
             }
-            case PRODUCT -> transition(reward, BenefitStatus.CLAIM_PENDING);
+            case PRODUCT -> transitionProduct(reward);
             case DRAW_CHANCE -> {
                 drawChances.credit(reward.userId(), fulfillmentNo, reward.rewardSnapshot().quantity());
                 transition(reward, BenefitStatus.AVAILABLE);
@@ -133,6 +152,13 @@ public class LotteryRewardDispatchServiceImpl implements LotteryRewardDispatchSe
 
     private void transition(ValidatedLotteryReward reward, BenefitStatus target) {
         if (benefits.transitionStatus(reward.benefitId(), reward.benefitStatus(), target) != 1) {
+            throw new BusinessException(BenefitErrorCode.BENEFIT_STATE_CONFLICT);
+        }
+    }
+
+    private void transitionProduct(ValidatedLotteryReward reward) {
+        LocalDateTime deadline = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS).plus(claimPeriod);
+        if (benefits.markClaimPending(reward.benefitId(), reward.benefitStatus(), deadline) != 1) {
             throw new BusinessException(BenefitErrorCode.BENEFIT_STATE_CONFLICT);
         }
     }

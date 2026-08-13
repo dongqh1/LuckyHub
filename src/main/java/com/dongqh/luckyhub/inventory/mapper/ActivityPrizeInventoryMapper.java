@@ -12,4 +12,11 @@ public interface ActivityPrizeInventoryMapper {
               AND remaining_stock > 0
             """)
     int decrementIfAvailable(@Param("activityPrizeId") long activityPrizeId);
+
+    @Update("""
+            UPDATE marketing_activity_prize
+            SET remaining_stock=remaining_stock+1,updated_at=CURRENT_TIMESTAMP(3)
+            WHERE id=#{activityPrizeId} AND remaining_stock<total_stock
+            """)
+    int incrementIfBelowTotal(@Param("activityPrizeId") long activityPrizeId);
 }

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.dongqh.luckyhub.catalog.enums.ProductType;
+import com.dongqh.luckyhub.shipping.vo.ShippingAddressSnapshotView;
 import com.dongqh.luckyhub.common.enums.ErrorCode;
 import com.dongqh.luckyhub.config.MybatisPlusConfig;
 import com.dongqh.luckyhub.rbac.constant.PermissionCodes;
@@ -107,6 +108,8 @@ class PointsDomainContractTests {
                 Map.entry("status", requiredClass("enums.PointsRedemptionStatus")),
                 Map.entry("reversalNo", String.class),
                 Map.entry("failureReason", String.class),
+                Map.entry("addressSnapshotId", Long.class),
+                Map.entry("shippingOrderId", Long.class),
                 Map.entry("createdAt", LocalDateTime.class),
                 Map.entry("updatedAt", LocalDateTime.class)));
 
@@ -140,8 +143,8 @@ class PointsDomainContractTests {
         assertAdminAdjustmentValidation();
 
         assertRecord("dto.CreatePointsRedemptionCommand", new String[]{
-                "redemptionNo", "skuId", "quantity"
-        }, new Class<?>[]{String.class, Long.class, Integer.class});
+                "redemptionNo", "skuId", "quantity", "addressId"
+        }, new Class<?>[]{String.class, Long.class, Integer.class, Long.class});
         assertRecord("dto.ReversePointsRedemptionCommand", new String[]{
                 "reversalNo", "reason"
         }, new Class<?>[]{String.class, String.class});
@@ -174,11 +177,15 @@ class PointsDomainContractTests {
         assertRecord("vo.PointsRedemptionView", new String[]{
                 "id", "redemptionNo", "userId", "skuId", "quantity", "unitPoints", "totalPoints",
                 "productCode", "productName", "skuCode", "skuName", "productType", "imageUrl",
-                "status", "reversalNo", "failureReason", "createdAt", "updatedAt"
+                "status", "reversalNo", "failureReason", "addressSnapshot", "shippingOrderId",
+                "shippingNo", "shippingStatus",
+                "createdAt", "updatedAt"
         }, new Class<?>[]{
                 Long.class, String.class, Long.class, Long.class, Integer.class, Long.class, Long.class,
                 String.class, String.class, String.class, String.class, ProductType.class, String.class,
                 requiredClass("enums.PointsRedemptionStatus"), String.class, String.class,
+                ShippingAddressSnapshotView.class, Long.class, String.class,
+                com.dongqh.luckyhub.shipping.enums.ShippingStatus.class,
                 LocalDateTime.class, LocalDateTime.class
         });
     }

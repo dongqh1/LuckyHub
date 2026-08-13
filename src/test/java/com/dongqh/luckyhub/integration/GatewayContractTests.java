@@ -15,22 +15,32 @@ class GatewayContractTests {
         PointsGrantRequest points = new PointsGrantRequest("FUL-2", 7L, 500L, "抽奖奖励");
         MembershipGrantRequest membership = new MembershipGrantRequest("FUL-3", 7L, "VIP_MONTH", 30);
         LogisticsCreateRequest logistics = new LogisticsCreateRequest(
-                "FUL-4", 7L, "SKU-CUP", 2, "张*", "138****5678", "浙江省杭州市***");
+                "FUL-4", 7L, 99L, "SKU-CUP", 2,
+                "张三", "13812345678", "浙江省", "杭州市", "西湖区", "文三路1号",
+                "张*", "138****5678", "浙江省杭州市西湖区***");
 
         assertThat(coupon.couponTemplateCode()).isEqualTo("NEW20");
         assertThat(points.points()).isEqualTo(500L);
         assertThat(membership.durationDays()).isEqualTo(30);
+        assertThat(logistics.phone()).isEqualTo("13812345678");
         assertThat(logistics.phoneMasked()).isEqualTo("138****5678");
+        assertThat(logistics.toString()).isEqualTo("LogisticsCreateRequest[REDACTED]");
     }
 
     @Test
-    void rejectsUnmaskedOrInvalidLogisticsData() {
+    void rejectsInvalidLogisticsDataWithoutEchoingSensitiveValues() {
         assertThatThrownBy(() -> new LogisticsCreateRequest(
-                "FUL-4", 7L, "SKU-CUP", 1, "张三", "13812345678", "浙江省杭州市西湖区"))
+                "FUL-4", 7L, 99L, "SKU-CUP", 1,
+                "张三", "bad-phone", "浙江省", "杭州市", "西湖区", "文三路1号",
+                "张*", "138****5678", "浙江省杭州市西湖区***"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("脱敏");
+                .hasMessageNotContaining("bad-phone")
+                .hasMessageNotContaining("张三")
+                .hasMessageNotContaining("文三路1号");
         assertThatThrownBy(() -> new LogisticsCreateRequest(
-                "FUL-4", 7L, "SKU-CUP", 0, "张*", "138****5678", "浙江省杭州市***"))
+                "FUL-4", 7L, 99L, "SKU-CUP", 0,
+                "张三", "13812345678", "浙江省", "杭州市", "西湖区", "文三路1号",
+                "张*", "138****5678", "浙江省杭州市西湖区***"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

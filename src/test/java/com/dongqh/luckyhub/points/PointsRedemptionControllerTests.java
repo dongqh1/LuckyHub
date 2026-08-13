@@ -130,6 +130,7 @@ class PointsRedemptionControllerTests {
                 ProductType.PHYSICAL, null, status,
                 status == PointsRedemptionStatus.REVERSED ? "REV-1" : null,
                 status == PointsRedemptionStatus.REVERSED ? "履约失败" : null,
+                null, null,
                 LocalDateTime.now(), LocalDateTime.now());
     }
 }

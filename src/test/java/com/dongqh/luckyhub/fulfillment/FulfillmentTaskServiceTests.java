@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.*;
    command("TASK-C",FulfillmentType.COUPON,new CouponFulfillmentPayload("NEW20",1)),
    command("TASK-P",FulfillmentType.POINTS,new PointsFulfillmentPayload(500,"抽奖奖励")),
    command("TASK-M",FulfillmentType.MEMBERSHIP,new MembershipFulfillmentPayload("VIP",30)),
-   command("TASK-L",FulfillmentType.LOGISTICS,new LogisticsFulfillmentPayload("SKU-1",1,"王*","137****9999","北京市海淀区***")));
+   command("TASK-L",FulfillmentType.LOGISTICS,new LogisticsFulfillmentPayload(1L,"SKU-1",1,"王*","137****9999","北京市海淀区***")));
   List<FulfillmentTaskView> views=commands.stream().map(service::create).toList();
   assertThat(views).extracting(FulfillmentTaskView::status).containsOnly(FulfillmentStatus.PENDING);
   assertThat(views.get(0).payload()).isEqualTo(new CouponFulfillmentPayload("NEW20",1));
@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.*;
  }
  @Test void validatesPayloadTypeAndMaskedLogistics(){
   assertThatThrownBy(()->command("BAD",FulfillmentType.COUPON,new PointsFulfillmentPayload(1,"x"))).isInstanceOf(IllegalArgumentException.class);
-  assertThatThrownBy(()->new LogisticsFulfillmentPayload("SKU",1,"王五","13712349999","北京市海淀区" )).isInstanceOf(IllegalArgumentException.class);
+  assertThatThrownBy(()->new LogisticsFulfillmentPayload(1L,"SKU",1,"王五","13712349999","北京市海淀区" )).isInstanceOf(IllegalArgumentException.class);
  }
  @Test void getsAndPagesByTypeStatusAndIdentity(){
   service.create(command("PAGE-C",FulfillmentType.COUPON,new CouponFulfillmentPayload("C1",1)));

@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -19,6 +20,8 @@ import java.util.Set;
 @Component
 public class PermissionInterceptor
         implements HandlerInterceptor {
+
+    private static final String LOGISTICS_CALLBACK_PATH = "/api/shipping/callbacks/logistics";
 
     private static final Logger log =
             LoggerFactory.getLogger(
@@ -41,6 +44,11 @@ public class PermissionInterceptor
             HttpServletResponse response,
             Object handler
     ) {
+        if (HttpMethod.POST.matches(request.getMethod())
+                && LOGISTICS_CALLBACK_PATH.equals(request.getRequestURI())) {
+            return true;
+        }
+
         /*
          * 静态资源或不存在的 API 可能不是 HandlerMethod。
          * 这里继续执行，让 Spring 最终返回正常的 404。
