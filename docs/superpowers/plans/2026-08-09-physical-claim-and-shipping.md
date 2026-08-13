@@ -1,6 +1,6 @@
 # LuckyHub Phase 6 Physical Claim and Shipping Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Every tracked step is now marked complete with `- [x]`.
 
 **Goal:** Deliver one privacy-safe address, claim, shipping, waybill and tracking workflow for lottery products, paid physical orders and points-redemption physical orders.
 
@@ -53,7 +53,7 @@
 - Adds nullable `addressSnapshotId` and `shippingOrderId` to cash and points orders.
 - Adds nullable `claimDeadline`, `claimedAt`, `shippingOrderId` to benefits and extends `BenefitStatus` with the approved physical states.
 
-- [ ] **Step 1: Write failing schema and reflection contracts**
+- [x] **Step 1: Write failing schema and reflection contracts**
 
 Assert V17, the five new tables, encrypted columns as `TEXT`, masked columns as bounded `VARCHAR`, exact checks, foreign identity columns, unique source/idempotency keys, permission rows and nullable legacy columns.
 
@@ -72,7 +72,7 @@ assertThat(ShippingStatus.values()).containsExactly(
     READY, FULFILLING, SHIPPED, IN_TRANSIT, DELIVERED, FAILED, TERMINATED);
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest=ShippingSchemaContractTests,ShippingDomainContractTests' test
@@ -80,7 +80,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest
 
 Expected: compilation/schema failures because V17 and `shipping` types do not exist.
 
-- [ ] **Step 3: Add V17 with exact state and privacy constraints**
+- [x] **Step 3: Add V17 with exact state and privacy constraints**
 
 The migration creates the five approved tables, uses `UNIQUE KEY uk_shipping_order_source (source_type,source_id)` and nullable `UNIQUE KEY uk_shipping_order_claim_request (claim_request_id)`, extends `chk_inventory_ledger_operation` with `CLAIM_RETURN`, gives existing `CLAIM_PENDING` rows `DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 7 DAY)`, adds `shipping:address:manage`, `shipping:read`, `shipping:operate`, grants user permissions to USER/ADMIN and management permissions to ADMIN, and extends existing benefit fields without rewriting old rewards.
 
@@ -96,7 +96,7 @@ SET claim_deadline = DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 7 DAY)
 WHERE status = 'CLAIM_PENDING' AND claim_deadline IS NULL;
 ```
 
-- [ ] **Step 4: Add minimal enums, entities and mappers**
+- [x] **Step 4: Add minimal enums, entities and mappers**
 
 Keep each entity a plain MyBatis-Plus mapping. Mapper lock methods use explicit `FOR UPDATE`, for example:
 
@@ -105,11 +105,11 @@ Keep each entity a plain MyBatis-Plus mapping. Mapper lock methods use explicit 
 ShippingOrder lockBySource(ShippingSourceType type, String sourceId);
 ```
 
-- [ ] **Step 5: Run GREEN and migration regressions**
+- [x] **Step 5: Run GREEN and migration regressions**
 
 Run the focused tests plus `'-Dtest=DatabaseSchemaMigrationTests,LotteryMigrationGuardTests,FulfillmentSchemaContractTests' test`. Expected: all selected tests pass and Flyway reports V17.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Explain why `source_type + source_id` prevents three domains from producing duplicates. Commit `feat: add physical shipping persistence`.
 
@@ -154,15 +154,15 @@ public interface ShippingAddressService {
 }
 ```
 
-- [ ] **Step 1: Write failing crypto, masking, ownership and controller tests**
+- [x] **Step 1: Write failing crypto, masking, ownership and controller tests**
 
 Prove random ciphertext for equal plaintext, correct decryption, tamper rejection, key-version envelope, `张*` and `138****5678`, one default address under concurrency, soft deletion, no cross-user reads/writes, and authentication/permission enforcement on `/api/shipping/**`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=AddressCipherTests,ShippingAddressServiceTests,ShippingAddressControllerTests' test`. Expected: missing types/endpoints.
 
-- [ ] **Step 3: Implement the exact crypto envelope and configuration**
+- [x] **Step 3: Implement the exact crypto envelope and configuration**
 
 `ShippingProperties` binds `luckyhub.shipping.address-key`, `address-key-version`, `claim-period`, callback secret/window and scheduler sizes. Decode a 32-byte Base64 key, use a random 12-byte nonce and 128-bit GCM tag, and return `v1.<base64-nonce>.<base64-ciphertext-and-tag>`. Never include plaintext in exception messages.
 
@@ -179,15 +179,15 @@ luckyhub:
     batch-size: 50
 ```
 
-- [ ] **Step 4: Implement transactional address operations and API**
+- [x] **Step 4: Implement transactional address operations and API**
 
 Validate Mainland China 11-digit mobile numbers, nonblank bounded address parts, ownership and active status. Encrypt every sensitive field before insert/update; views contain only masked fields and never decrypt. `makeDefault` locks the user's active rows, clears the old default and sets the selected row in one transaction.
 
-- [ ] **Step 5: Run GREEN plus security regressions**
+- [x] **Step 5: Run GREEN plus security regressions**
 
 Run focused tests plus `'-Dtest=LotterySecurityChainIntegrationTests,PointsSecurityChainIntegrationTests,FulfillmentSecurityChainIntegrationTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Show that two encryptions of the same phone differ while both display `138****5678`. Commit `feat: protect user shipping addresses`.
 
@@ -223,27 +223,27 @@ public interface ShippingAddressSnapshotService {
 
 Both create commands append nullable `@Positive Long addressId`. Identity validation for retries includes `addressId` through the stored snapshot origin, so the same order number with a different address is an idempotency conflict.
 
-- [ ] **Step 1: Write failing physical/virtual and immutability tests**
+- [x] **Step 1: Write failing physical/virtual and immutability tests**
 
 Assert physical orders require an owned active address, virtual orders reject `addressId`, both create a snapshot inside the order transaction, changing/deleting the address does not change the snapshot, and order rollback leaves no orphan snapshot.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=ShippingAddressSnapshotTests,PhysicalOrderAddressIntegrationTests,CashOrderServiceTests,PointsRedemptionServiceTests' test`.
 
-- [ ] **Step 3: Implement immutable snapshot creation**
+- [x] **Step 3: Implement immutable snapshot creation**
 
 Load the owned address once, copy existing ciphertext and masked fields, insert with source identity, and return the existing equal snapshot on duplicate source. Different address origin or contents for the same source throws `SHIPPING_IDEMPOTENCY_CONFLICT`.
 
-- [ ] **Step 4: Integrate cash and points transactions**
+- [x] **Step 4: Integrate cash and points transactions**
 
 After the business order row obtains its ID, create the snapshot and conditionally update its `address_snapshot_id`. For physical rows require the ID; for virtual rows require null. Keep the old payment and points asset semantics unchanged.
 
-- [ ] **Step 5: Run GREEN and Phase 2/3 regressions**
+- [x] **Step 5: Run GREEN and Phase 2/3 regressions**
 
 Run focused tests plus `'-Dtest=Phase3EndToEndTests,PointsRedemptionConcurrencyTests,OrderCancellationTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Use the “杭州下单、地址簿改成上海、包裹仍发杭州” example. Commit `feat: snapshot physical order addresses`.
 
@@ -282,27 +282,27 @@ public record ClaimPhysicalBenefitCommand(
     @NotNull @Positive Long addressId) {}
 ```
 
-- [ ] **Step 1: Write failing ownership, deadline, idempotency and race tests**
+- [x] **Step 1: Write failing ownership, deadline, idempotency and race tests**
 
 Cover eligible claim, wrong user/type/status, deadline equality, duplicate request, different-address retry, 20 concurrent claims, claim-versus-expiry, old migrated grace period and one inventory return.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=PhysicalBenefitClaimTests,PhysicalClaimConcurrencyTests,PhysicalClaimExpiryTests' test`.
 
-- [ ] **Step 3: Stamp deadlines when products become claimable**
+- [x] **Step 3: Stamp deadlines when products become claimable**
 
 In the Phase 5 dispatcher, set `claim_deadline = now + properties.claimPeriod()` in the same conditional update that sets `CLAIM_PENDING`. Do not create a shipping or fulfillment row at win time.
 
-- [ ] **Step 4: Implement locked claim and expiry transactions**
+- [x] **Step 4: Implement locked claim and expiry transactions**
 
 Claim locks the benefit, cross-checks PRODUCT snapshot/SKU quantity and user, stores the unique request ID on the shipping order, creates the snapshot and unified shipping order, then updates benefit. Expiry locks due rows, claims existing `inventory_ledger.business_no=CLAIM-EXPIRE-{benefitId}` with the new `CLAIM_RETURN` operation, and atomically increments `activity_prize_inventory.remaining_stock` by one using `draw_record.activity_prize_id`; transition only from `CLAIM_PENDING`. The benefit status and inventory ledger together prevent repeated return, while `shipping_order.claim_request_id` detects request conflicts.
 
-- [ ] **Step 5: Run GREEN plus Phase 5 product regressions**
+- [x] **Step 5: Run GREEN plus Phase 5 product regressions**
 
 Run focused tests plus `'-Dtest=LotteryFiveRewardEndToEndTests,LotteryRewardDispatchTests,ActivityPrizeInventoryTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Explain a user claiming at the same instant as the expiry scheduler. Commit `feat: claim and expire lottery products`.
 
@@ -345,31 +345,31 @@ public record LogisticsFulfillmentPayload(
     implements FulfillmentPayload {}
 ```
 
-- [ ] **Step 1: Write failing three-source idempotency and privacy tests**
+- [x] **Step 1: Write failing three-source idempotency and privacy tests**
 
 Prove one shipping order/task per source, stable `LOGISTICS-{id}`, payment retry and points retry do not duplicate, a completed physical points redemption cannot be reversed after shipping creation, logistics payload is masked, assembler decrypts only in memory, request `toString()` is redacted, and `sim_logistics_record.request_payload` contains no plaintext.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=ShippingOrderServiceTests,PhysicalSourceShippingTests,LogisticsPrivacyBoundaryTests,FulfillmentWorkerTests,SimulatorGatewayTests' test`.
 
-- [ ] **Step 3: Implement idempotent order/task creation**
+- [x] **Step 3: Implement idempotent order/task creation**
 
 Create `shipping_order` and a `FulfillmentTaskService.create` command in the same local transaction using `sourceType/sourceId` equality checks. Payment success calls it only for PHYSICAL after `markPaid`; points success calls it only for PHYSICAL after completion; lottery claim calls it after the snapshot exists.
 
-- [ ] **Step 4: Replace logistics execution with protected assembly**
+- [x] **Step 4: Replace logistics execution with protected assembly**
 
 Make `LogisticsCreateRequest` a final class with explicit accessors and a fixed redacted `toString()`. `FulfillmentWorker` reads the masked payload, delegates to the assembler, then calls Gateway outside the transaction. The simulator overrides serialization with a safe DTO containing only masked fields; its idempotency fingerprint is computed from that safe DTO.
 
-- [ ] **Step 5: Project fulfillment success/failure**
+- [x] **Step 5: Project fulfillment success/failure**
 
 `SUCCEEDED` writes carrier/waybill and `SHIPPED`; `QUARANTINED` or `TERMINATED` writes bounded safe failure and source `FULFILLMENT_FAILED/TERMINATED` where applicable; retry moves the shipping aggregate back to `FULFILLING` without changing its source identity.
 
-- [ ] **Step 6: Run GREEN and Phase 4 regressions**
+- [x] **Step 6: Run GREEN and Phase 4 regressions**
 
 Run focused tests plus `'-Dtest=FulfillmentEndToEndTests,FulfillmentRecoveryTests,FulfillmentSafetyTests,GatewayContractTests' test`.
 
-- [ ] **Step 7: Document and commit**
+- [x] **Step 7: Document and commit**
 
 Show that the task table sees `张*` while the adapter receives the full contact only in memory. Commit `feat: dispatch unified physical shipments`.
 
@@ -403,27 +403,27 @@ public record LogisticsCallbackCommand(
     String description, String signature) {}
 ```
 
-- [ ] **Step 1: Write failing signature, replay, duplicate and order tests**
+- [x] **Step 1: Write failing signature, replay, duplicate and order tests**
 
 Cover valid HMAC, tamper, five-minute expiry, duplicate callback, nonce replay under a different callback ID, 20 concurrent duplicates, unknown waybill, allowed status ranks and `DELIVERED` followed by delayed `IN_TRANSIT` without regression.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=LogisticsCallbackTests,LogisticsCallbackConcurrencyTests,ShippingQueryControllerTests' test`.
 
-- [ ] **Step 3: Implement canonical HMAC and transactional callback**
+- [x] **Step 3: Implement canonical HMAC and transactional callback**
 
 Sign the UTF-8 string `callbackId\nnonce\ntimestamp\nwaybillNo\neventType\neventTime`; compare decoded signatures with `MessageDigest.isEqual`. Claim callback and nonce unique rows before locking the shipping order. Insert a unique provider event and apply monotonic status rank in one transaction.
 
-- [ ] **Step 4: Route simulator events through the same callback path**
+- [x] **Step 4: Route simulator events through the same callback path**
 
 The admin simulator endpoint creates a UUID callback/nonce, signs with the configured local secret and invokes `LogisticsCallbackService`; it must not update shipping tables directly.
 
-- [ ] **Step 5: Add masked user queries and run GREEN**
+- [x] **Step 5: Add masked user queries and run GREEN**
 
 Return only own shipping order, masked snapshot and ordered tracking events. Run focused tests plus existing authentication/interceptor tests.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Use the delayed `IN_TRANSIT` after `DELIVERED` example. Commit `feat: track signed logistics callbacks`.
 
@@ -449,27 +449,27 @@ Use the delayed `IN_TRANSIT` after `DELIVERED` example. Commit `feat: track sign
 - `retry(shippingNo, operatorId, note)` delegates to the linked fulfillment retry and reprojects the shipping state.
 - `terminate(shippingNo, operatorId, note)` delegates to fulfillment termination and stores only a bounded safe note.
 
-- [ ] **Step 1: Write failing admin, projection and authorization tests**
+- [x] **Step 1: Write failing admin, projection and authorization tests**
 
 Prove default masking, exact permission codes, retry from failed/quarantined, forbidden retry/terminate states, safe note truncation, recovery to shipped, and benefit progression `CLAIMED -> FULFILLING -> SHIPPED -> DELIVERED`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run `'-Dtest=ShippingAdminServiceTests,ShippingAdminControllerTests,ShippingFailureProjectionTests' test`.
 
-- [ ] **Step 3: Implement bounded projector and admin service**
+- [x] **Step 3: Implement bounded projector and admin service**
 
 Scan linked tasks in ID order, maximum 100. Lock one shipping row per transaction, map only approved fulfillment states, never overwrite delivered/terminated, and use the existing fulfillment service for state transitions.
 
-- [ ] **Step 4: Append compatible source queries**
+- [x] **Step 4: Append compatible source queries**
 
 Append nullable `shippingNo` and `shippingStatus` to benefit, cash and points views. Old rows and virtual products return null. No response exposes ciphertext or full contact fields.
 
-- [ ] **Step 5: Run GREEN and query/security regressions**
+- [x] **Step 5: Run GREEN and query/security regressions**
 
 Run focused tests plus `'-Dtest=BenefitControllerTests,Phase3ControllerTests,PointsRedemptionControllerTests,FulfillmentControllerTests' test`.
 
-- [ ] **Step 6: Document and commit**
+- [x] **Step 6: Document and commit**
 
 Explain a quarantined courier task that succeeds after an admin retry. Commit `feat: operate failed physical shipments`.
 
@@ -487,15 +487,15 @@ Explain a quarantined courier task that succeeds after an admin retry. Commit `f
 **Interfaces:**
 - Produces executable examples for addresses, physical cash purchase, points redemption, lottery claim, worker execution, simulated tracking and user/admin queries.
 
-- [ ] **Step 1: Write three real end-to-end scenarios**
+- [x] **Step 1: Write three real end-to-end scenarios**
 
 Each scenario creates real catalog/reward/activity/account data, uses the public service/controller path, runs the fulfillment worker/projector, emits signed simulator callbacks and asserts one snapshot, one shipping order, one task, one simulator record, ordered tracks and terminal delivery.
 
-- [ ] **Step 2: Add concurrency and privacy scans**
+- [x] **Step 2: Add concurrency and privacy scans**
 
 Repeat payment/claim/redemption/task/callback concurrently. Query all shipping, fulfillment, attempt, callback and simulator JSON/text columns and capture relevant application logs; assert absence of the fixture's full receiver, phone and detailed address.
 
-- [ ] **Step 3: Run RED, implement only exposed gaps, then GREEN**
+- [x] **Step 3: Run RED, implement only exposed gaps, then GREEN**
 
 Any new defect first gets a focused failing assertion. Run:
 
@@ -505,13 +505,13 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest
 
 Expected final result: all selected tests pass with no skips.
 
-- [ ] **Step 4: Run Phase 6 focused acceptance**
+- [x] **Step 4: Run Phase 6 focused acceptance**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest=ShippingSchemaContractTests,ShippingDomainContractTests,AddressCipherTests,ShippingAddressServiceTests,ShippingAddressControllerTests,ShippingAddressSnapshotTests,PhysicalOrderAddressIntegrationTests,PhysicalBenefitClaimTests,PhysicalClaimConcurrencyTests,PhysicalClaimExpiryTests,ShippingOrderServiceTests,PhysicalSourceShippingTests,LogisticsPrivacyBoundaryTests,LogisticsCallbackTests,LogisticsCallbackConcurrencyTests,ShippingQueryControllerTests,ShippingAdminServiceTests,ShippingAdminControllerTests,ShippingFailureProjectionTests,PhysicalShippingEndToEndTests,PhysicalShippingConcurrencyTests,PhysicalShippingSafetyTests' test
 ```
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 Explain all three timelines and why they converge after source validation. Commit `test: verify three physical shipping flows`.
 
@@ -530,11 +530,11 @@ Explain all three timelines and why they converge after source validation. Commi
 **Interfaces:**
 - Produces a runnable V1-V17 project, exact new test/table/JAR evidence, and a next-route decision without claiming refunds or real courier integration.
 
-- [ ] **Step 1: Create safe V17 fresh-schema verification**
+- [x] **Step 1: Create safe V17 fresh-schema verification**
 
 Clone the Phase 5 script safety pattern with a random `luckyhub_phase6_verify_<guid>` schema, separate creation/grant tracking, `finally` revoke/drop, cleanup failure propagation, exact Flyway V17 assertion and dynamically verified business-table count.
 
-- [ ] **Step 2: Run fresh migration and critical concurrency**
+- [x] **Step 2: Run fresh migration and critical concurrency**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Phase6FreshMigration.ps1
@@ -543,7 +543,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 '-Dtest
 
 Confirm no `luckyhub_phase6_verify_%` schema remains.
 
-- [ ] **Step 3: Run full suite and package from fresh commands**
+- [x] **Step 3: Run full suite and package from fresh commands**
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
@@ -552,15 +552,15 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package
 
 Record exact test count, failures/errors/skips and JAR byte size. Do not reuse Phase 5 numbers.
 
-- [ ] **Step 4: Run executable JAR and OpenAPI smoke**
+- [x] **Step 4: Run executable JAR and OpenAPI smoke**
 
 Start `target/luckyhub-0.0.1-SNAPSHOT.jar` on a free local port with MySQL, Redis, `SHIPPING_ADDRESS_KEY` and `SHIPPING_CALLBACK_SECRET`; wait for `/v3/api-docs`; assert address, claim, shipping query, callback and admin routes; stop only the launched process.
 
-- [ ] **Step 5: Run static delivery and requirement checks**
+- [x] **Step 5: Run static delivery and requirement checks**
 
 Run `git diff --check`, strict UTF-8 decode, Markdown local-link validation, secret/PII fixture scan, plan checkbox scan and task-document count. Review the Phase 6 diff for Critical/Important issues in encryption, idempotency, transaction boundaries, source ownership, state monotonicity, replay prevention, inventory compensation and privacy. Reproduce every defect with a RED test before fixing it.
 
-- [ ] **Step 6: Update handoff, check all boxes and commit**
+- [x] **Step 6: Update handoff, check all boxes and commit**
 
 Mark Phase 6 complete, record exact evidence and known boundaries, and identify the next optional phase without inventing Phase 7 scope. Commit `docs: hand off phase six physical shipping`.
 
