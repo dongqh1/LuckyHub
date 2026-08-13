@@ -82,7 +82,10 @@ Java `record`、十连抽配置复用和 MySQL 最终库存判断的教学文档
 阶段 5 抽奖统一奖励、五类奖励时间线、权益查询字段和幂等安全说明见
 [`docs/lottery-reward-fulfillment-api.md`](docs/lottery-reward-fulfillment-api.md)。
 
-当前数据库迁移已到 V16。可运行产物使用以下命令生成和启动：
+阶段 6 三种实物来源、地址、领取、模拟物流、用户/管理员查询和可执行脱敏示例见
+[`docs/physical-shipping-api.md`](docs/physical-shipping-api.md)。
+
+当前数据库迁移已到 V17。可运行产物使用以下命令生成和启动：
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 package '-DskipTests'
