@@ -30,6 +30,18 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-Maven.ps1 test
 
 `.codex-progress/` 和 `.superpowers/` 是用户的未跟踪辅助目录，不要提交或删除。
 
+阶段 6 的复审基线位于分支 `feature/phase6-physical-shipping`，起点为 `ca213f9`。任务提交索引如下：
+
+```text
+Task 1  d945a01 8521bc3       Task 6  0499bd1 a7a9938 d9f7987
+Task 2  fcdca0c               Task 7  9c4942a d624219
+Task 3  89c651d 98e17e9       Task 8  3a9a750 2fb8243
+Task 4  e8aecf0 3b2e1fa b78621a
+Task 5  20887f9 ee9ba36       Task 9  d95bdab
+```
+
+恢复时运行 `git log ca213f9..HEAD --oneline` 核对完整链；后续若只有交接修订，以该分支当前 `HEAD` 为准。
+
 ## 3. 已完成阶段
 
 ```text
