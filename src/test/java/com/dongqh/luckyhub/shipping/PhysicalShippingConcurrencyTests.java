@@ -21,44 +21,48 @@ class PhysicalShippingConcurrencyTests extends ShippingTestFixture {
 
     @Test
     void twentyDuplicatePaymentCallbacksStillCreateOneAggregateAndTask() throws Exception {
-        CashFlow flow = paidCashFlow();
-        concurrently(20, () -> payments.callback(flow.paymentCallback()));
-        assertOne(flow.shippingOrderId(), flow.fulfillmentNo());
+        PreparedCashFlow prepared = prepareCashFlow();
+        concurrently(20, () -> payments.callback(prepared.paymentCallback()));
+        CashFlow flow = completedCashFlow(prepared);
+        assertOne("CASH_ORDER", Long.toString(flow.sourceId()), flow.fulfillmentNo(), false);
     }
 
     @Test
     void twentyDuplicateRedemptionsStillConsumeOnceAndCreateOneAggregate() throws Exception {
-        PointsFlow flow = pointsFlow();
-        long skuId = jdbc.queryForObject("SELECT sku_id FROM points_redemption_order WHERE redemption_no=?",
-                Long.class, flow.redemptionNo());
-        long addressId = jdbc.queryForObject("SELECT address_id FROM shipping_address_snapshot WHERE id=(SELECT address_snapshot_id FROM shipping_order WHERE id=?)",
-                Long.class, flow.shippingOrderId());
-        concurrently(20, () -> redemptions.create(flow.userId(),
-                new CreatePointsRedemptionCommand(flow.redemptionNo(), skuId, 1, addressId)));
-        assertOne(flow.shippingOrderId(), flow.fulfillmentNo());
+        PreparedPointsFlow prepared = preparePointsFlow();
+        concurrently(20, () -> redemptions.create(prepared.userId(),
+                new CreatePointsRedemptionCommand(prepared.redemptionNo(), prepared.skuId(), 1, prepared.addressId())));
+        PointsFlow flow = completedPointsFlow(prepared);
+        assertOne("POINTS_REDEMPTION", Long.toString(flow.sourceId()), flow.fulfillmentNo(), false);
+        assertThat(points.get(flow.userId()).balance()).isEqualTo(900);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM points_ledger WHERE user_id=? AND business_id=?",
                 Integer.class, flow.userId(), flow.redemptionNo())).isOne();
     }
 
     @Test
     void twentyDuplicateClaimsAndWorkersKeepStableIdentity() throws Exception {
-        LotteryFlow flow = lotteryFlow();
-        long addressId = jdbc.queryForObject("SELECT address_id FROM shipping_address_snapshot WHERE id=(SELECT address_snapshot_id FROM shipping_order WHERE id=?)",
-                Long.class, flow.shippingOrderId());
-        concurrently(20, () -> claims.claim(flow.userId(), flow.benefitId(),
-                new ClaimPhysicalBenefitCommand(flow.claimRequestId(), addressId)));
+        PreparedLotteryFlow prepared = prepareLotteryFlow();
+        concurrently(20, () -> claims.claim(prepared.userId(), prepared.benefitId(),
+                new ClaimPhysicalBenefitCommand(prepared.claimRequestId(), prepared.addressId())));
+        LotteryFlow flow = completedLotteryFlow(prepared);
         concurrently(20, worker::runBatch);
         shippingProjector.projectOne(flow.shippingOrderId());
-        assertOne(flow.shippingOrderId(), flow.fulfillmentNo());
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sim_logistics_record WHERE fulfillment_no=?",
-                Integer.class, flow.fulfillmentNo())).isOne();
+        assertOne("LOTTERY_BENEFIT", Long.toString(flow.benefitId()), flow.fulfillmentNo(), true);
     }
 
-    private void assertOne(long shippingOrderId, String fulfillmentNo) {
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE id=?",
-                Integer.class, shippingOrderId)).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fulfillment_task WHERE fulfillment_no=?",
-                Integer.class, fulfillmentNo)).isOne();
+    private void assertOne(String sourceType, String sourceId, String fulfillmentNo, boolean simulatorExpected) {
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot WHERE source_type=? AND source_id=?",
+                Integer.class, sourceType, sourceId)).isOne();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE source_type=? AND source_id=?",
+                Integer.class, sourceType, sourceId)).isOne();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM fulfillment_task t JOIN shipping_order o ON o.fulfillment_no=t.fulfillment_no
+                WHERE o.source_type=? AND o.source_id=? AND t.fulfillment_no=?
+                """, Integer.class, sourceType, sourceId, fulfillmentNo)).isOne();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM sim_logistics_record s JOIN shipping_order o ON o.fulfillment_no=s.fulfillment_no
+                WHERE o.source_type=? AND o.source_id=?
+                """, Integer.class, sourceType, sourceId)).isEqualTo(simulatorExpected ? 1 : 0);
     }
 
     private void concurrently(int count, ThrowingAction action) throws Exception {

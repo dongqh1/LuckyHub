@@ -1,6 +1,6 @@
 # 实物物流 API
 
-本文只使用虚构、脱敏数据。先登录并把 JWT 放入环境变量：
+本文只使用虚构测试数据。先登录并把 JWT 放入环境变量：
 
 ```powershell
 $BaseUrl = 'http://localhost:8080'
@@ -10,7 +10,7 @@ $Headers = @{ Authorization = "Bearer $Token"; 'Content-Type' = 'application/jso
 
 ## 地址与三种来源
 
-创建地址时，示例值本身就是脱敏占位符，不能粘贴真实姓名、手机或门牌号到脚本、工单和日志：
+创建地址时，示例值是虚构测试数据，不能粘贴真实姓名、手机或门牌号到脚本、工单和日志：
 
 ```powershell
 $Address = Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/shipping/addresses" -Headers $Headers -Body (@{
@@ -49,7 +49,7 @@ Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/benefits/$BenefitId/claim" -He
 
 ## 物流查询与本地模拟事件
 
-用户查询只返回 `测***`、`139****0000` 和地区摘要：
+用户查询只返回脱敏后的姓名、手机和地区摘要；客户端不得依赖星号数量或具体掩码形状：
 
 ```powershell
 $ShippingNo = '<接口返回的 SHIPPING-...>'

@@ -8,6 +8,7 @@ import com.dongqh.luckyhub.activity.service.ActivityService;
 import com.dongqh.luckyhub.auth.context.LoginContext;
 import com.dongqh.luckyhub.auth.model.LoginPrincipal;
 import com.dongqh.luckyhub.benefit.service.LotteryRewardProjectionService;
+import com.dongqh.luckyhub.benefit.service.BenefitQueryService;
 import com.dongqh.luckyhub.integration.simulator.controller.SimulatorAdminController;
 import com.dongqh.luckyhub.lottery.algorithm.DrawRandomSource;
 import com.dongqh.luckyhub.lottery.dto.DrawCommand;
@@ -39,6 +40,9 @@ import com.dongqh.luckyhub.shipping.service.ShippingProjectionWorker;
 import com.dongqh.luckyhub.shipping.service.ShippingQueryService;
 import com.dongqh.luckyhub.shipping.service.PhysicalClaimService;
 import com.dongqh.luckyhub.shipping.dto.ClaimPhysicalBenefitCommand;
+import com.dongqh.luckyhub.shipping.crypto.AddressCipher;
+import com.dongqh.luckyhub.shipping.crypto.LogisticsCallbackSigner;
+import com.dongqh.luckyhub.shipping.service.LogisticsCallbackService;
 import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -54,9 +58,11 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 abstract class ShippingTestFixture extends Task5ShippingTestFixture {
-    static final String RECEIVER = "顾隐私";
-    static final String PHONE = "13987654321";
-    static final String DETAIL = "未来科技城海创园八号楼十二层1208室";
+    private final String privacySuffix = UUID.randomUUID().toString().substring(0, 8);
+    protected final String receiverProbe = "顾隐私T8" + privacySuffix;
+    protected final String phoneProbe = "139" + String.format("%08d",
+            Math.floorMod(UUID.randomUUID().hashCode(), 100_000_000));
+    protected final String detailProbe = "Task8独特探针海创园八号楼" + privacySuffix + "室";
 
     @Autowired protected CashOrderService cashOrders;
     @Autowired protected PaymentService payments;
@@ -75,6 +81,10 @@ abstract class ShippingTestFixture extends Task5ShippingTestFixture {
     @Autowired protected MessageConsumeService messageConsumer;
     @Autowired protected LotteryRewardProjectionService benefitProjector;
     @Autowired protected PhysicalClaimService claims;
+    @Autowired protected BenefitQueryService benefitQueries;
+    @Autowired protected AddressCipher addressCipher;
+    @Autowired protected LogisticsCallbackSigner callbackSigner;
+    @Autowired protected LogisticsCallbackService logisticsCallbacks;
     @Autowired protected MessageOutboxMapper outboxes;
     @Autowired protected ObjectMapper json;
     @MockitoBean protected DrawRandomSource drawRandom;
@@ -88,10 +98,14 @@ abstract class ShippingTestFixture extends Task5ShippingTestFixture {
 
     protected long createPrivateAddress(long userId) {
         return addresses.create(userId, new com.dongqh.luckyhub.shipping.dto.CreateShippingAddressCommand(
-                RECEIVER, PHONE, "浙江省", "杭州市", "余杭区", DETAIL, false)).id();
+                receiverProbe, phoneProbe, "浙江省", "杭州市", "余杭区", detailProbe, false)).id();
     }
 
     protected CashFlow paidCashFlow() {
+        return completeCashFlow(prepareCashFlow());
+    }
+
+    protected PreparedCashFlow prepareCashFlow() {
         long userId = createUser();
         long addressId = createPrivateAddress(userId);
         long skuId = createPhysicalSku(true, false);
@@ -101,31 +115,59 @@ abstract class ShippingTestFixture extends Task5ShippingTestFixture {
         var payment = payments.create(userId, new CreatePaymentCommand(paymentNo, orderNo));
         var callback = new PaymentCallbackCommand(paymentNo, PaymentResult.SUCCESS, null,
                 payments.signForSimulation(paymentNo, PaymentResult.SUCCESS, payment.amountCent()));
-        payments.callback(callback);
-        var source = cashOrders.get(userId, orderNo);
+        long sourceId = jdbc.queryForObject("SELECT id FROM mall_order WHERE order_no=?", Long.class, orderNo);
+        return new PreparedCashFlow(userId, addressId, orderNo, paymentNo, sourceId, callback);
+    }
+
+    protected CashFlow completeCashFlow(PreparedCashFlow prepared) {
+        payments.callback(prepared.paymentCallback());
+        return completedCashFlow(prepared);
+    }
+
+    protected CashFlow completedCashFlow(PreparedCashFlow prepared) {
+        var source = cashOrders.get(prepared.userId(), prepared.orderNo());
         task8ShippingOrderIds.add(source.shippingOrderId());
         String fulfillmentNo = "LOGISTICS-" + source.shippingOrderId();
         trackFulfillment(fulfillmentNo);
-        return new CashFlow(userId, orderNo, paymentNo, source.shippingOrderId(),
-                source.shippingNo(), fulfillmentNo, callback);
+        return new CashFlow(prepared.userId(), prepared.orderNo(), prepared.paymentNo(), prepared.sourceId(),
+                source.shippingOrderId(), source.shippingNo(), fulfillmentNo, prepared.paymentCallback());
     }
 
     protected PointsFlow pointsFlow() {
+        return completePointsFlow(preparePointsFlow());
+    }
+
+    protected PreparedPointsFlow preparePointsFlow() {
         long userId = createUser();
         long skuId = createPhysicalSku(false, true);
         long addressId = createPrivateAddress(userId);
         points.adjust(new AdminPointsAdjustmentCommand(userId, 1_000L, unique("TASK8-SEED"), "验收入账"));
         String redemptionNo = unique("TASK8-POINTS");
-        var source = redemptions.create(userId,
-                new CreatePointsRedemptionCommand(redemptionNo, skuId, 1, addressId));
+        return new PreparedPointsFlow(userId, skuId, addressId, redemptionNo);
+    }
+
+    protected PointsFlow completePointsFlow(PreparedPointsFlow prepared) {
+        redemptions.create(prepared.userId(),
+                new CreatePointsRedemptionCommand(prepared.redemptionNo(), prepared.skuId(), 1, prepared.addressId()));
+        return completedPointsFlow(prepared);
+    }
+
+    protected PointsFlow completedPointsFlow(PreparedPointsFlow prepared) {
+        var source = redemptions.get(prepared.userId(), prepared.redemptionNo());
+        long sourceId = jdbc.queryForObject("SELECT id FROM points_redemption_order WHERE redemption_no=?",
+                Long.class, prepared.redemptionNo());
         task8ShippingOrderIds.add(source.shippingOrderId());
         String fulfillmentNo = "LOGISTICS-" + source.shippingOrderId();
         trackFulfillment(fulfillmentNo);
-        return new PointsFlow(userId, redemptionNo, source.shippingOrderId(),
+        return new PointsFlow(prepared.userId(), prepared.redemptionNo(), sourceId, source.shippingOrderId(),
                 source.shippingNo(), fulfillmentNo);
     }
 
     protected LotteryFlow lotteryFlow() throws Exception {
+        return completeLotteryFlow(prepareLotteryFlow());
+    }
+
+    protected PreparedLotteryFlow prepareLotteryFlow() throws Exception {
         long userId = createUser();
         lotteryUserIds.add(userId);
         long skuId = createPhysicalSku(true, false);
@@ -158,15 +200,33 @@ abstract class ShippingTestFixture extends Task5ShippingTestFixture {
             messageConsumer.consume(json.readValue(payload, DrawEventEnvelope.class));
             benefitProjector.project(benefitId);
             String claimRequestId = UUID.randomUUID().toString();
-            var shipping = claims.claim(userId, benefitId,
-                    new ClaimPhysicalBenefitCommand(claimRequestId, addressId));
-            task8ShippingOrderIds.add(shipping.id());
-            trackFulfillment(shipping.fulfillmentNo());
-            return new LotteryFlow(userId, benefitId, claimRequestId, shipping.id(),
-                    shipping.shippingNo(), shipping.fulfillmentNo());
+            return new PreparedLotteryFlow(userId, addressId, benefitId, claimRequestId);
         } finally {
             LoginContext.clear();
         }
+    }
+
+    protected LotteryFlow completeLotteryFlow(PreparedLotteryFlow prepared) {
+        var shipping = claims.claim(prepared.userId(), prepared.benefitId(),
+                new ClaimPhysicalBenefitCommand(prepared.claimRequestId(), prepared.addressId()));
+        return completedLotteryFlow(prepared, shipping.id(), shipping.shippingNo(), shipping.fulfillmentNo());
+    }
+
+    protected LotteryFlow completedLotteryFlow(PreparedLotteryFlow prepared) {
+        var row = jdbc.queryForMap("""
+                SELECT id,shipping_no,fulfillment_no FROM shipping_order
+                WHERE source_type='LOTTERY_BENEFIT' AND source_id=?
+                """, Long.toString(prepared.benefitId()));
+        return completedLotteryFlow(prepared, ((Number) row.get("id")).longValue(),
+                (String) row.get("shipping_no"), (String) row.get("fulfillment_no"));
+    }
+
+    private LotteryFlow completedLotteryFlow(PreparedLotteryFlow prepared, long shippingOrderId,
+                                              String shippingNo, String fulfillmentNo) {
+        task8ShippingOrderIds.add(shippingOrderId);
+        trackFulfillment(fulfillmentNo);
+        return new LotteryFlow(prepared.userId(), prepared.benefitId(), prepared.claimRequestId(), shippingOrderId,
+                shippingNo, fulfillmentNo);
     }
 
     private void assertNoShippingAtWin(long benefitId) {
@@ -210,13 +270,21 @@ abstract class ShippingTestFixture extends Task5ShippingTestFixture {
         task8ShippingOrderIds.clear();
     }
 
-    protected record CashFlow(long userId, String orderNo, String paymentNo,
+    protected record PreparedCashFlow(long userId, long addressId, String orderNo, String paymentNo,
+                                      long sourceId, PaymentCallbackCommand paymentCallback) { }
+
+    protected record CashFlow(long userId, String orderNo, String paymentNo, long sourceId,
                               long shippingOrderId, String shippingNo,
                               String fulfillmentNo, PaymentCallbackCommand paymentCallback) {
     }
 
-    protected record PointsFlow(long userId, String redemptionNo, long shippingOrderId,
+    protected record PreparedPointsFlow(long userId, long skuId, long addressId, String redemptionNo) { }
+
+    protected record PointsFlow(long userId, String redemptionNo, long sourceId, long shippingOrderId,
                                 String shippingNo, String fulfillmentNo) { }
+
+    protected record PreparedLotteryFlow(long userId, long addressId, long benefitId,
+                                         String claimRequestId) { }
 
     protected record LotteryFlow(long userId, long benefitId, String claimRequestId,
                                  long shippingOrderId, String shippingNo, String fulfillmentNo) { }

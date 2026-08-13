@@ -28,10 +28,7 @@ class PhysicalShippingEndToEndTests extends ShippingTestFixture {
         assertThat(admin.status()).isEqualTo(ShippingStatus.DELIVERED);
         assertThat(user.tracking()).extracting(event -> event.eventType().name())
                 .containsExactly("PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot WHERE source_type='CASH_ORDER' AND source_id=(SELECT CAST(id AS CHAR) FROM mall_order WHERE order_no=?)", Integer.class, flow.orderNo())).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE id=?", Integer.class, flow.shippingOrderId())).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fulfillment_task WHERE fulfillment_no=?", Integer.class, flow.fulfillmentNo())).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sim_logistics_record WHERE fulfillment_no=?", Integer.class, flow.fulfillmentNo())).isOne();
+        assertSourceAggregate("CASH_ORDER", Long.toString(flow.sourceId()), flow.fulfillmentNo());
     }
 
     @Test
@@ -44,7 +41,8 @@ class PhysicalShippingEndToEndTests extends ShippingTestFixture {
         assertThat(source.status().name()).isEqualTo("COMPLETED");
         assertThat(source.shippingStatus()).isEqualTo(ShippingStatus.DELIVERED);
         assertThat(points.get(flow.userId()).balance()).isEqualTo(900);
-        assertDeliveredAggregate(flow.shippingOrderId(), flow.fulfillmentNo(), flow.shippingNo());
+        assertDeliveredAggregate(flow.shippingOrderId(), flow.shippingNo());
+        assertSourceAggregate("POINTS_REDEMPTION", Long.toString(flow.sourceId()), flow.fulfillmentNo());
     }
 
     @Test
@@ -55,17 +53,31 @@ class PhysicalShippingEndToEndTests extends ShippingTestFixture {
 
         assertThat(jdbc.queryForObject("SELECT status FROM user_benefit WHERE id=?", String.class,
                 flow.benefitId())).isEqualTo("DELIVERED");
-        assertDeliveredAggregate(flow.shippingOrderId(), flow.fulfillmentNo(), flow.shippingNo());
+        assertDeliveredAggregate(flow.shippingOrderId(), flow.shippingNo());
+        assertSourceAggregate("LOTTERY_BENEFIT", Long.toString(flow.benefitId()), flow.fulfillmentNo());
     }
 
-    private void assertDeliveredAggregate(long shippingOrderId, String fulfillmentNo, String shippingNo) {
+    private void assertDeliveredAggregate(long shippingOrderId, String shippingNo) {
         var user = shippingQueries.getForUser(jdbc.queryForObject(
                 "SELECT target_user_id FROM shipping_order WHERE id=?", Long.class, shippingOrderId), shippingNo);
         assertThat(user.status()).isEqualTo(ShippingStatus.DELIVERED);
         assertThat(user.tracking()).hasSize(4);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot WHERE id=(SELECT address_snapshot_id FROM shipping_order WHERE id=?)", Integer.class, shippingOrderId)).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE id=?", Integer.class, shippingOrderId)).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fulfillment_task WHERE fulfillment_no=?", Integer.class, fulfillmentNo)).isOne();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM sim_logistics_record WHERE fulfillment_no=?", Integer.class, fulfillmentNo)).isOne();
+    }
+
+    private void assertSourceAggregate(String sourceType, String sourceId, String fulfillmentNo) {
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_address_snapshot WHERE source_type=? AND source_id=?",
+                Integer.class, sourceType, sourceId)).isOne();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shipping_order WHERE source_type=? AND source_id=?",
+                Integer.class, sourceType, sourceId)).isOne();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM fulfillment_task t
+                JOIN shipping_order o ON o.fulfillment_no=t.fulfillment_no
+                WHERE o.source_type=? AND o.source_id=? AND t.fulfillment_no=?
+                """, Integer.class, sourceType, sourceId, fulfillmentNo)).isOne();
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM sim_logistics_record s
+                JOIN shipping_order o ON o.fulfillment_no=s.fulfillment_no
+                WHERE o.source_type=? AND o.source_id=?
+                """, Integer.class, sourceType, sourceId)).isOne();
     }
 }
